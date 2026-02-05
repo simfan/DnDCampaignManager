@@ -1,0 +1,266 @@
+﻿using BlazorApp1.Data;
+using BlazorApp1.DTOs;
+using BlazorApp1.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+
+namespace BlazorApp1.Controllers
+{
+    [Authorize]
+    [Route("api/[controller]")]
+    [ApiController]
+    public class CharactersController : ControllerBase
+    {
+        private readonly ApplicationDbContext _context;
+
+        public CharactersController(ApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: api/Characters
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Character>>> GetCharacters()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Get all characters belonging to the current user
+            var characters = await _context.Characters
+                .Include(c => c.Classes)
+                .Include(c => c.Campaign)
+                .Where(c => c.PlayerId == userId)
+                .ToListAsync();
+
+            var characterDtos = characters.Select(c => MapToCharacterDto(c)).ToList();
+
+            return Ok(characters);
+        }
+
+        // GET: api/Characters/5
+        [HttpGet("{id}")]
+        public async Task<ActionResult<CharacterDto>> GetCharacter(int id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var character = await _context.Characters
+                .Include(c => c.Classes)
+                .Include(c => c.Campaign)
+                .Include(c => c.Player)
+                .FirstOrDefaultAsync(c => c.CharacterId == id);
+
+            if (character == null)
+            {
+                return NotFound();
+            }
+
+            // Check if user owns this character OR is DM of the campaign
+            var isDM = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == character.CampaignId
+                    && cm.UserId == userId
+                    && cm.Role == CampaignRole.DM);
+
+            if (character.PlayerId != userId && !isDM)
+            {
+                return Forbid();
+            }
+
+            var characterDto = MapToCharacterDto(character);
+
+            return Ok(characterDto);
+        }
+
+        // GET: api/Characters/campaign/5
+        [HttpGet("campaign/{campaignId}")]
+        public async Task<ActionResult<IEnumerable<Character>>> GetCharactersByCampaign(int campaignId)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Check if user is a member of this campaign
+            var isMember = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == campaignId && cm.UserId == userId);
+
+            if (!isMember)
+            {
+                return Forbid();
+            }
+
+            var characters = await _context.Characters
+                .Include(c => c.Classes)
+                .Include(c => c.Player)
+                .Where(c => c.CampaignId == campaignId)
+                .ToListAsync();
+
+            return Ok(characters);
+        }
+
+        // POST: api/Characters
+        [HttpPost]
+        public async Task<ActionResult<CharacterDto>> CreateCharacter(CreateCharacterDto createdCharacter)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Verify user is a member of the campaign
+            var isMember = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == createdCharacter.CampaignId && cm.UserId == userId);
+
+            if (!isMember)
+            {
+                return Forbid();
+            }
+
+            var character = new Character
+            {
+                Name = createdCharacter.Name,
+                Race = createdCharacter.Race,
+                CampaignId = createdCharacter.CampaignId,
+                PlayerId = userId,
+                Strength = createdCharacter.Strength,
+                Dexterity = createdCharacter.Dexterity,
+                Constitution = createdCharacter.Constitution,
+                Intelligence = createdCharacter.Intelligence,
+                Wisdom = createdCharacter.Wisdom,
+                Charisma = createdCharacter.Charisma,
+                ArmorClass = createdCharacter.ArmorClass,
+                MaxHitPoints = createdCharacter.MaxHitPoints,
+                CurrentHitPoints = createdCharacter.CurrentHitPoints,
+                ExperiencePoints = 0,
+                CreatedDate = DateTime.UtcNow,
+                Classes = createdCharacter.Classes.Select(cc => new CharacterClass
+                {
+                    Name = cc.Name,
+                    Level = cc.Level
+                }).ToList()
+            };
+            _context.Characters.Add(character);
+            await _context.SaveChangesAsync();
+
+            var characterDto = MapToCharacterDto(character!);
+
+            return CreatedAtAction(nameof(GetCharacter), new { id = character.CharacterId }, characterDto);
+        }
+
+        // PUT: api/Characters/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCharacter(int id, Character character)
+        {
+            if (id != character.CharacterId)
+            {
+                return BadRequest();
+            }
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var existingCharacter = await _context.Characters.FindAsync(id);
+            if (existingCharacter == null)
+            {
+                return NotFound();
+            }
+
+            // Check if user owns this character OR is DM
+            var isDM = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == existingCharacter.CampaignId
+                    && cm.UserId == userId
+                    && cm.Role == CampaignRole.DM);
+
+            if (existingCharacter.PlayerId != userId && !isDM)
+            {
+                return Forbid();
+            }
+
+            // Update properties
+            existingCharacter.Name = character.Name;
+            existingCharacter.Race = character.Race;
+            existingCharacter.ExperiencePoints = character.ExperiencePoints;
+            existingCharacter.Strength = character.Strength;
+            existingCharacter.Dexterity = character.Dexterity;
+            existingCharacter.Constitution = character.Constitution;
+            existingCharacter.Intelligence = character.Intelligence;
+            existingCharacter.Wisdom = character.Wisdom;
+            existingCharacter.Charisma = character.Charisma;
+            existingCharacter.ArmorClass = character.ArmorClass;
+            existingCharacter.MaxHitPoints = character.MaxHitPoints;
+            existingCharacter.CurrentHitPoints = character.CurrentHitPoints;
+            existingCharacter.LastUpdatedDate = DateTime.UtcNow;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!CharacterExists(id))
+                {
+                    return NotFound();
+                }
+                throw;
+            }
+
+            return NoContent();
+        }
+
+        // DELETE: api/Characters/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteCharacter(int id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var character = await _context.Characters.FindAsync(id);
+            if (character == null)
+            {
+                return NotFound();
+            }
+
+            // Only owner can delete
+            if (character.PlayerId != userId)
+            {
+                return Forbid();
+            }
+
+            _context.Characters.Remove(character);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        private bool CharacterExists(int id)
+        {
+            return _context.Characters.Any(e => e.CharacterId == id);
+        }
+
+        private CharacterDto MapToCharacterDto(Character character)
+        {
+            return new CharacterDto
+            {
+                CharacterId = character.CharacterId,
+                Name = character.Name,
+                Race = character.Race,
+                ExperiencePoints = character.ExperiencePoints,
+                TotalLevel = character.Classes.Sum(c => c.Level),
+                Classes = character.Classes.Select(cc => new CharacterClassDto
+                {
+                    CharacterClassId = cc.CharacterClassId,
+                    Name = cc.Name,
+                    Level = cc.Level
+                }).ToList(),
+                Strength = character.Strength,
+                Dexterity = character.Dexterity,
+                Constitution = character.Constitution,
+                Intelligence = character.Intelligence,
+                Wisdom = character.Wisdom,
+                Charisma = character.Charisma,
+                ArmorClass = character.ArmorClass,
+                MaxHitPoints = character.MaxHitPoints,
+                CurrentHitPoints = character.CurrentHitPoints,
+                CampaignId = character.CampaignId,
+                CampaignName = character.Campaign?.Name ?? "Unknown",
+                PlayerId = character.PlayerId,
+                PlayerName = character.Player?.UserName ?? "Unknown",
+                CreatedDate = character.CreatedDate,
+                LastModifiedDate = character.LastUpdatedDate
+            };
+        }
+    }
+}
