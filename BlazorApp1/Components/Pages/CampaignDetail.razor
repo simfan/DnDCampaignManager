@@ -1,0 +1,165 @@
+﻿@page "/campaigns/{CampaignId:int}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@using BlazorApp1.Components.Shared
+@using BlazorStrap
+@using BlazorStrap.V5
+@inject CampaignService CampaignService
+@inject CharacterService CharacterService
+@inject NavigationManager Navigation
+@attribute [Authorize]
+
+<PageTitle>@(campaign?.Name ?? "Campaign")</PageTitle>
+
+<div class="container mt-4">
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (campaign == null)
+    {
+        <div class="alert alert-danger">Campaign not found.</div>
+    }
+    else
+    {
+        <div class="mb-4">
+            <button class="btn btn-outline-secondary mb-3" @onclick="GoBack">
+                <i class="bi bi-arrow-left"></i> Back to Campaigns
+            </button>
+
+            <h1>@campaign.Name</h1>
+            <p class="lead">@campaign.Description</p>
+            <p class="text-muted">
+                <i class="bi bi-shield"></i> DM: @campaign.CreatedByName
+                @if (!campaign.IsActive)
+                {
+                    <span class="badge bg-secondary ms-2">Inactive</span>
+                }
+            </p>
+        </div>
+
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "characters" ? "active" : "")"
+                   @onclick='() => activeTab = "characters"'
+                   style="cursor: pointer;">
+                    Characters (@campaign.Characters.Count)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "members" ? "active" : "")"
+                   @onclick='() => activeTab = "members"'
+                   style="cursor: pointer;">
+                    Members (@campaign.Members.Count)
+                </a>
+            </li>
+        </ul>
+
+        @if (activeTab == "characters")
+        {
+            <div class="mb-3">
+                <button class="btn btn-primary" @onclick="CreateCharacter">
+                    <i class="bi bi-plus-circle"></i> Create Character
+                </button>
+            </div>
+
+            @if (campaign.Characters.Count == 0)
+            {
+                <div class="alert alert-info">No characters in this campaign yet.</div>
+            }
+            else
+            {
+                <div class="row">
+                    @foreach (var character in campaign.Characters)
+                    {
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card" style="cursor: pointer;" @onclick="() => ViewCharacter(character.CharacterId)">
+                                <div class="card-body">
+                                    <h5 class="card-title">@character.Name</h5>
+                                    <p class="card-text">
+                                        <strong>@character.Race</strong><br />
+                                        @string.Join(", ", character.Classes.Select(c => $"{c.Name} {c.Level}"))<br />
+                                        <span class="badge bg-primary">Level @character.TotalLevel</span>
+                                    </p>
+                                    <small class="text-muted">Player: @character.PlayerName</small>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else if (activeTab == "members")
+        {
+            <div class="list-group">
+                @foreach (var member in campaign.Members)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">@member.Username</h6>
+                                <small class="text-muted">Joined @member.JoinedDate.ToShortDateString()</small>
+                            </div>
+                            <span class="badge @(member.Role == "DM" ? "bg-danger" : "bg-primary")">
+                                @member.Role
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+<div class ="col-md-4">
+<DiceRoller />
+</div>
+<button onclick="DiceService">Skill Check</button>
+@code {
+    [Parameter]
+    public int CampaignId { get; set; }
+
+    private CampaignDetailDto? campaign;
+    private bool isLoading = true;
+    private string activeTab = "characters";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCampaign();
+    }
+
+    private async Task LoadCampaign()
+    {
+        isLoading = true;
+        try
+        {
+            campaign = await CampaignService.GetCampaignAsync(CampaignId);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/campaigns");
+    }
+
+    private void CreateCharacter()
+    {
+        Navigation.NavigateTo($"/campaigns/{CampaignId}/characters/create");
+    }
+
+    private void ViewCharacter(int characterId)
+    {
+        Navigation.NavigateTo($"/characters/{characterId}");
+    }
+
+    
+}

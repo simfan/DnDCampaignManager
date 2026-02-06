@@ -1,0 +1,288 @@
+﻿@page "/characters/{CharacterId:int}"
+@rendermode InteractiveServer
+@using BlazorApp1.DTOs
+@using BlazorApp1.Models
+@using BlazorApp1.Services
+@using Microsoft.AspNetCore.Authorization
+@inject CharacterService CharacterService
+@inject NavigationManager Navigation
+@inject DiceService DiceService
+@inject IJSRuntime JSRuntime
+@attribute [Authorize]
+
+<PageTitle>@(character?.Name ?? "Character")</PageTitle>
+
+<div class="container mt-4">
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (character == null)
+    {
+        <div class="alert alert-danger">Character not found.</div>
+    }
+    else
+    {
+        <div class="mb-4">
+            <button class="btn btn-outline-secondary mb-3" @onclick="GoBack">
+                <i class="bi bi-arrow-left"></i> Back to Campaign
+            </button>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>@character.Name</h1>
+                    <p class="lead">
+                        @character.Race
+                        @string.Join(" / ", character.Classes.Select(c => $"{c.Name} {c.Level}"))
+                    </p>
+                    <p class="text-muted">
+                        <i class="bi bi-person"></i> Player: @character.PlayerName |
+                        <i class="bi bi-map"></i> Campaign: @character.CampaignName
+                    </p>
+                </div>
+                <div>
+                    <span class="badge bg-primary" style="font-size: 1.5rem;">Level @character.TotalLevel</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5>Ability Scores</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4 mb-3">
+                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Strength))">
+                                    <div class="fw-bold">STR</div>
+                                    <div class="display-6">@character.Strength</div>
+                                    <div class="text-muted small">@GetModifier(character.Strength)</div>
+                                </div>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Dexterity))">
+                                    <div class="fw-bold">DEX</div>
+                                    <div class="display-6">@character.Dexterity</div>
+                                    <div class="text-muted small">@GetModifier(character.Dexterity)</div>
+                                </div>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Constitution))">
+                                    <div class="fw-bold">CON</div>
+                                    <div class="display-6">@character.Constitution</div>
+                                    <div class="text-muted small">@GetModifier(character.Constitution)</div>
+                                </div>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Intelligence))">
+                                    <div class="fw-bold">INT</div>
+                                    <div class="display-6">@character.Intelligence</div>
+                                    <div class="text-muted small">@GetModifier(character.Intelligence)</div>
+                                </div>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Wisdom))">
+                                    <div class="fw-bold">WIS</div>
+                                    <div class="display-6">@character.Wisdom</div>
+                                    <div class="text-muted small">@GetModifier(character.Wisdom)</div>
+                                </div>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Charisma))">
+                                    <div class="fw-bold">CHA</div>
+                                    <div class="display-6">@character.Charisma</div>
+                                    <div class="text-muted small">@GetModifier(character.Charisma)</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                            @if(lastRoll != null)
+                            {
+                                <hr />
+                                <div class="row text-center">
+                                    <div class="col-4 mb-3">
+                                        <div class="border rounded p-2">
+                                            <div class="fw-bold">ROLL</div>
+                                            <div class="display-6">@lastRoll.Total</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4 mb-3">
+                                        <div class="border rounded p-2">
+                                            <div class="fw-bold">MOD</div>
+                                            <div class="display-6">@lastRoll.Modifier</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4 mb-3">
+                                        <div class="border rounded p-2">
+                                            <div class="fw-bold">TOTAL</div>
+                                            <div class="display-6">@lastRoll.FinalTotal</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span>@lastRoll.Total @(lastRoll.Modifier < 0 ? " - " : " + ") @lastRoll.Modifier = @lastRoll.FinalTotal</span>
+                            }
+                            else
+                            {
+                                <span>No Roll</span> 
+                            }
+                        
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5>Classes</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            @foreach (var characterClass in character.Classes)
+                            {
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>@characterClass.Name</span>
+                                    <span class="badge bg-secondary">Level @characterClass.Level</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5>Combat Stats</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="text-center border rounded p-3">
+                                    <div class="text-muted small">Armor Class</div>
+                                    <div class="display-4">@character.ArmorClass</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center border rounded p-3">
+                                    <div class="text-muted small">Hit Points</div>
+                                    <div class="display-6">
+                                        <span class="@(character.CurrentHitPoints <= character.MaxHitPoints / 4 ? "text-danger" : "")">
+                                            @character.CurrentHitPoints
+                                        </span> / @character.MaxHitPoints
+                                    </div>
+                                    <div class="progress mt-2" style="height: 10px;">
+                                        <div class="progress-bar @(character.CurrentHitPoints <= character.MaxHitPoints / 4 ? "bg-danger" : "bg-success")"
+                                             role="progressbar"
+                                             style="width: @((double)character.CurrentHitPoints / character.MaxHitPoints * 100)%">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5>Experience</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center">
+                            <div class="display-6">@character.ExperiencePoints XP</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Actions</h5>
+                    </div>
+                    <div class="card-body d-grid gap-2">
+                        <button class="btn btn-primary" @onclick="EditCharacter">
+                            <i class="bi bi-pencil"></i> Edit Character
+                        </button>
+                        <button class="btn btn-danger" @onclick="DeleteCharacter">
+                            <i class="bi bi-trash"></i> Delete Character
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int CharacterId { get; set; }
+
+    private CharacterDto? character;
+    private bool isLoading = true;
+    private DiceRoll? lastRoll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCharacter();
+        //lastRoll.FinalTotal = 0;
+    }
+
+    private async Task LoadCharacter()
+    {
+        isLoading = true;
+        try
+        {
+            character = await CharacterService.GetCharacterAsync(CharacterId);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetModifier(int abilityScore)
+    {
+        int modifier = (abilityScore - 10) / 2;
+        return modifier >= 0 ? $"+{modifier}" : modifier.ToString();
+    }
+
+    private void RollAbilityCheck(int abilityScore)
+    {
+        int modifier = (abilityScore - 10) / 2;
+        lastRoll = DiceService.SkillCheck(modifier);
+    }
+
+
+    @***********************************************@
+    private void GoBack()
+    {
+        if (character != null)
+        {
+            Navigation.NavigateTo($"/campaigns/{character.CampaignId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/campaigns");
+        }
+    }
+
+    private void EditCharacter()
+    {
+        Navigation.NavigateTo($"/characters/{CharacterId}/edit");
+    }
+
+    private async Task DeleteCharacter()
+    {
+        if (character == null)
+            return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete {character.Name}?");
+        if (confirmed)
+        {
+            await CharacterService.DeleteCharacterAsync(CharacterId);
+            Navigation.NavigateTo($"/campaigns/{character.CampaignId}");
+        }
+    }
+}

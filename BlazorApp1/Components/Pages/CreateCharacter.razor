@@ -1,0 +1,263 @@
+﻿@page "/characters/create"
+@page "/campaigns/{CampaignId:int}/characters/create"
+@rendermode InteractiveServer
+@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@using BlazorStrap
+@using BlazorStrap.V5
+@using Microsoft.AspNetCore.Authorization
+@inject CharacterService CharacterService
+@inject CampaignService CampaignService
+@inject NavigationManager Navigation
+@attribute [Authorize]
+<PageTitle>Create Character</PageTitle>
+
+<div class ="container mt-4">
+    <div class="mb-4">
+        <BSButton><i class="bi bi-arrow-left"></i>Back</BSButton>
+
+        <h1>Create New Character</h1>
+    </div>
+    @if(isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="newCharacter" OnValidSubmit="CreateNewCharacter">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Basic Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Character Name *</label>
+                                <InputText class="form-control" @bind-Value="newCharacter.Name" />
+                                <ValidationMessage For="@(() => newCharacter.Name)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Race *</label>
+                                <InputText class="form-control" @bind-Value="newCharacter.Race" placeholder="e.g., Human, Elf, Dwarf" />
+                                <ValidationMessage For="@(() => newCharacter.Race)" />
+                            </div>
+
+                            @if (CampaignId == null)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Campaign *</label>
+                                    <InputSelect class="form-select" @bind-Value="newCharacter.CampaignId">
+                                        <option value="0">-- Select a Campaign --</option>
+                                        @foreach (var campaign in availableCampaigns)
+                                        {
+                                            <option value="@campaign.CampaignId">@campaign.Name</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => newCharacter.CampaignId)" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Classes</h5>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var characterClass in newCharacter.Classes)
+                            {
+                                <div class="row mb-2">
+                                    <div class="col-8">
+                                        <input type="text" class="form-control" placeholder="Class name" @bind="characterClass.Name" />
+                                    </div>
+                                    <div class="col-3">
+                                        <input type="number" class="form-control" placeholder="Level" min="1" max="20" @bind="characterClass.Level" />
+                                    </div>
+                                    <div class="col-1">
+                                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveClass(characterClass)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="AddClass">
+                                <i class="bi bi-plus"></i> Add Class
+                            </button>
+                            @if (newCharacter.Classes.Count == 0)
+                            {
+                                <div class="text-danger small mt-2">At least one class is required</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Ability Scores</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <label class="form-label">Strength</label>
+                                    <InputNumber class="form-control" @bind-Value="newCharacter.Strength" min="1" max="30" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Dexterity</label>
+                                    <InputNumber class="form-control" @bind-Value="newCharacter.Dexterity" min="1" max="30" />
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <label class="form-label">Constitution</label>
+                                    <InputNumber class="form-control" @bind-Value="newCharacter.Constitution" min="1" max="30" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Intelligence</label>
+                                    <InputNumber class="form-control" @bind-Value="newCharacter.Intelligence" min="1" max="30" />
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <label class="form-label">Wisdom</label>
+                                    <InputNumber class="form-control" @bind-Value="newCharacter.Wisdom" min="1" max="30" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Charisma</label>
+                                    <InputNumber class="form-control" @bind-Value="newCharacter.Charisma" min="1" max="30" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Combat Stats</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Armor Class</label>
+                                <InputNumber class="form-control" @bind-Value="newCharacter.ArmorClass" min="1" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Max Hit Points</label>
+                                <InputNumber class="form-control" @bind-Value="newCharacter.MaxHitPoints" min="1" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Current Hit Points</label>
+                                <InputNumber class="form-control" @bind-Value="newCharacter.CurrentHitPoints" min="0" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" @onclick="GoBack">Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled="@(newCharacter.Classes.Count == 0 || isSaving)">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Create Character
+                </button>
+            </div>
+        </EditForm>
+    }
+</div>
+@code {
+    [Parameter]
+    public int? CampaignId { get; set; }
+
+    private CreateCharacterDto newCharacter = new();
+    private List<CampaignDto> availableCampaigns = new();
+    private bool isLoading = true;
+    private bool isSaving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        try
+        {
+            // If CampaignId is provided via route, set it
+            if (CampaignId.HasValue)
+            {
+                newCharacter.CampaignId = CampaignId.Value;
+            }
+            else
+            {
+                // Load available campaigns for selection
+                availableCampaigns = await CampaignService.GetCampaignsAsync();
+            }
+
+            // Initialize with one class
+            newCharacter.Classes.Add(new CharacterClassDto { Level = 1 });
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void AddClass()
+    {
+        newCharacter.Classes.Add(new CharacterClassDto { Level = 1 });
+    }
+
+    private void RemoveClass(CharacterClassDto characterClass)
+    {
+        newCharacter.Classes.Remove(characterClass);
+    }
+
+    private async Task CreateNewCharacter()
+    {
+        if (newCharacter.Classes.Count == 0)
+            return;
+
+        if (newCharacter.CampaignId == 0)
+            return;
+
+        isSaving = true;
+        try
+        {
+            var created = await CharacterService.CreateCharacterAsync(newCharacter);
+
+            if (created != null)
+            {
+                // Navigate to the character detail page or back to campaign
+                if (CampaignId.HasValue)
+                {
+                    Navigation.NavigateTo($"/campaigns/{CampaignId.Value}");
+                }
+                else
+                {
+                    Navigation.NavigateTo($"/characters/{created.CharacterId}");
+                }
+            }
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        if (CampaignId.HasValue)
+        {
+            Navigation.NavigateTo($"/campaigns/{CampaignId.Value}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/campaigns");
+        }
+    }
+}

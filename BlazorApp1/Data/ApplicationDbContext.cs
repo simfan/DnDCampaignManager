@@ -16,7 +16,9 @@ namespace BlazorApp1.Data
         public DbSet<Character> Characters { get; set; }
         public DbSet<CharacterClass> CharacterClasses { get; set; }
         public DbSet<CampaignMember> CampaignMembers { get; set; }
-
+        public DbSet<Journal> Journals { get; set; }
+        public DbSet<Entry> Entries { get; set; }
+        public DbSet<Tag> Tags { get; set;  }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder); // IMPORTANT: calls Identity configuration
@@ -77,6 +79,21 @@ namespace BlazorApp1.Data
                     .WithMany(u => u.CampaignMemberships)
                     .HasForeignKey(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Entry>(entity =>
+            { 
+                entity.HasKey(e =>  e.EntryId); 
+                
+                entity.HasOne(e => e.Journal)
+                .WithMany(j => j.Entries)
+                .HasForeignKey(e => e.JournalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(e => e.AuthorId)
+                .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }
