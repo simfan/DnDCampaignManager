@@ -38,14 +38,14 @@
         <div class="row">
             @foreach (var campaign in campaigns)
             {
-                <BSCard CardType="CardType.Card">
+                <!--<BSCard CardType="CardType.Card">
                     <BSCard CardType="CardType.Header">
                         @campaign.Name
                     </BSCard>
                     <BSCard CardType="CardType.Body">
                         @campaign.Description
                     </BSCard>
-                </BSCard>
+                </BSCard>-->
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card h-100" style="cursor: pointer;" @onclick="() => ViewCampaign(campaign.CampaignId)">
                         <div class="card-body">
