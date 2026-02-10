@@ -37,6 +37,7 @@
         public DateTime CreatedDate { get; set; }
         public DateTime? LastModifiedDate { get; set; }
         public bool IsActive { get; set; }
+        public JournalDetailDto? Journal { get; set; }
         public List<CampaignMemberDto> Members { get; set; } = new();
         public List<CharacterDto> Characters { get; set; } = new();
     }

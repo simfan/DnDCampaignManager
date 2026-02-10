@@ -33,6 +33,8 @@ namespace BlazorApp1.Data
                     .WithMany(u => u.CreatedCampaigns)
                     .HasForeignKey(e => e.CreatedById)
                     .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Ignore(e => e.Journal);
             });
 
             // Character Configuration
@@ -94,6 +96,37 @@ namespace BlazorApp1.Data
                 .WithMany()
                 .HasForeignKey(e => e.AuthorId)
                 .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<EntryTag>(entity =>
+            {
+                entity.HasKey(et => new { et.EntryId, et.TagId });
+
+                entity.HasOne(et => et.Entry)
+                .WithMany(e => e.Tags)
+                .HasForeignKey(et => et.EntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(et => et.Tag)
+                .WithMany(e => e.EntryTags)
+                .HasForeignKey(et => et.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
+            });
+
+
+            modelBuilder.Entity<JournalTag>(entity =>
+            {
+                entity.HasKey(jt => new { jt.JournalId, jt.TagId }); // Composite key
+
+                entity.HasOne(jt => jt.Journal)
+                    .WithMany(j => j.Tags)
+                    .HasForeignKey(jt => jt.JournalId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(jt => jt.Tag)
+                    .WithMany(t => t.JournalTags)
+                    .HasForeignKey(jt => jt.TagId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

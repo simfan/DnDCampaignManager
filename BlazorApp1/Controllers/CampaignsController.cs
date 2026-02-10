@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using BlazorApp1.Conversions;
 
 namespace BlazorApp1.Controllers
 {
@@ -71,6 +72,15 @@ namespace BlazorApp1.Controllers
             {
                 return Forbid();
             }
+
+            var campaignStringId = id.ToString();
+            var journal = await _context.Journals
+                .Include(j => j.Entries)
+                    .ThenInclude(e => e.Tags)
+                        .ThenInclude(et => et.Tag)
+                .Include(j => j.Tags)
+                    .ThenInclude(jt => jt.Tag)
+                .FirstOrDefaultAsync(j => j.JournalTypeId == (int)JournalType.Campaign && j.OwnerId == campaignStringId);
             var campaignDto = new CampaignDetailDto
             {
                 CampaignId = campaign.CampaignId,
@@ -117,7 +127,8 @@ namespace BlazorApp1.Controllers
                     PlayerName = ch.Player?.UserName ?? "Unknown",
                     CreatedDate = ch.CreatedDate,
                     LastModifiedDate = ch.LastUpdatedDate
-                }).ToList()
+                }).ToList(),
+                Journal = journal != null ? JournalConversions.JournalToDetailDto(journal) : null
             };
 
             return Ok(campaignDto);

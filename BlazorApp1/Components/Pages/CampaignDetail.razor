@@ -116,6 +116,15 @@
         }
     }
 </div>
+<div>@if(campaign?.Journal != null)
+    {
+        <div>@campaign.Journal.Name</div>
+    }
+    else
+    {
+        <div>No Journal Found. <BSButton>Create One</BSButton></div>
+    }
+</div>
 <div class ="col-md-4">
 <DiceRoller />
 </div>
@@ -154,6 +163,11 @@
     private void CreateCharacter()
     {
         Navigation.NavigateTo($"/campaigns/{CampaignId}/characters/create");
+    }
+
+    private void AddJournal()
+    {
+        
     }
 
     private void ViewCharacter(int characterId)

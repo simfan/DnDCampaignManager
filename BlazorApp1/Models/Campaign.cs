@@ -17,6 +17,7 @@ namespace BlazorApp1.Models
         public ApplicationUser? CreatedBy { get; set; } // The DM
         public List<Character> Characters { get; set; } = new List<Character>();
         public List<CampaignMember> Members { get; set; } = new List<CampaignMember>();
+        public Journal? Journal { get; set; }
 
         // Metadata
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
