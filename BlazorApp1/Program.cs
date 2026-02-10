@@ -23,6 +23,7 @@ builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 builder.Services.AddScoped<DiceService>();
 
+
 // Add HttpContextAccessor and CookieHandler
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<CookieHandler>();
@@ -39,6 +40,13 @@ builder.Services.AddHttpClient<CharacterService>(client =>
     client.BaseAddress = new Uri("https://localhost:7282/");
 })
 .AddHttpMessageHandler<CookieHandler>();
+;
+builder.Services.AddHttpClient<JournalService>(client =>
+{ 
+    client.BaseAddress = new Uri("https://localhost:7282/");
+})
+.AddHttpMessageHandler<CookieHandler>();
+
 
 builder.Services.AddControllers();
 
@@ -64,6 +72,12 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services
+    .AddServerSideBlazor()
+    .AddCircuitOptions(options =>
+    {
+        options.DetailedErrors = true;
+    });
 
 var app = builder.Build();
 

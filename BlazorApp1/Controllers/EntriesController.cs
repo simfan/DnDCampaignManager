@@ -51,11 +51,19 @@ namespace BlazorApp1.Controllers
         [HttpPost()]
         public async Task<ActionResult<EntryDto>> CreateEntry(CreateEntryDto createdEntry)
         {
-            var entry = EntryConversions.CreateToEntry(createdEntry);
-            _context.Entries.Add(entry);
-            await _context.SaveChangesAsync();
-            var entryDto = EntryConversions.EntryToDto(entry);
-            return Ok(entryDto);
+            try
+            {
+                var entry = EntryConversions.CreateToEntry(createdEntry);
+                _context.Entries.Add(entry);
+                await _context.SaveChangesAsync();
+                var entryDto = EntryConversions.EntryToDto(entry);
+                return Ok(entryDto);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error " + ex.Message);
+                throw;
+            }
         }
 
         [HttpPut("{id}")]

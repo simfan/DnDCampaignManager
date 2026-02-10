@@ -1,0 +1,88 @@
+﻿
+@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@using BlazorStrap
+@using BlazorStrap.V5
+@using System.ComponentModel.DataAnnotations
+@inject JournalService JournalService
+@if (isLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <BSForm Model = "newJournal" OnSubmit="CreateNewJournal">
+    <h3>New Journal</h3>
+    <div>
+        <div>Journal Name</div> 
+        <div>
+            <BSInput InputType="InputType.Text" @bind-Value="newJournal.Name"/>
+            <BSLabel>Journal Name</BSLabel>
+        </div>
+        <BSButton IsSubmit>Save New Journal</BSButton>
+        <div>For Testing Purposes Only</div>
+        <div>Journal Type: @JournalTypeId</div>
+        <div>Owner ID: @OwnerId</div>
+
+    </div>
+    </BSForm>
+}
+@code {
+    [Parameter]
+    public string OwnerId { get; set; } = string.Empty;
+    [Parameter]
+    public int JournalTypeId{ get; set; }
+    [Parameter]
+    public EventCallback<JournalDto> CreatedJournal { get; set; }
+
+    private bool isLoading = true;
+
+    private CreateJournalDto newJournal = new();
+    private JournalDto journal = new();
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadNewJournal();
+    }
+
+    private async Task LoadNewJournal()
+    {
+        isLoading = true;
+        //StateHasChanged();
+        if (!string.IsNullOrEmpty(OwnerId))
+        {
+            newJournal.JournalTypeId = JournalTypeId;
+            newJournal.OwnerId = OwnerId;
+        }
+        isLoading = false;
+        //StateHasChanged();
+    }
+
+    private async Task CreateNewJournal()
+    {
+        try{
+            if(string.IsNullOrEmpty(newJournal.Name) || string.IsNullOrEmpty(OwnerId))
+            {
+                Console.WriteLine("New Journal Name Or Owner Is Empty");
+                return;
+            }
+            Console.Write("Journal Submitted");
+            journal = await JournalService.CreateJournalAsync(newJournal);
+            if(journal is null)
+            {
+                Console.WriteLine("Journal is Null");
+                return;
+            }
+            await CreatedJournal.InvokeAsync(journal);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"CreateNewJournal exception: {ex}");
+            throw; // keep this so Blazor still shows it, for now
+        }
+    }
+}

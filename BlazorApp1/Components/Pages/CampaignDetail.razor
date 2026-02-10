@@ -118,11 +118,24 @@
 </div>
 <div>@if(campaign?.Journal != null)
     {
-        <div>@campaign.Journal.Name</div>
+        @if(!createJournal)
+        {
+            <JournalFull Journal="@campaign.Journal"/>
+        }
     }
     else
     {
-        <div>No Journal Found. <BSButton>Create One</BSButton></div>
+        <div>No Journal Found.
+            @if(!createJournal)
+            {
+                <BSButton Color="BSColor.Primary" OnClick="ShowAddJournalSection">Create One</BSButton>
+            }
+            else if(campaign != null)
+            {
+                <NewJournal OwnerId="@campaign.CampaignId.ToString()" JournalTypeId="3" CreatedJournal = "UpdateJournal"/>
+            }
+        </div>
+
     }
 </div>
 <div class ="col-md-4">
@@ -136,6 +149,7 @@
     private CampaignDetailDto? campaign;
     private bool isLoading = true;
     private string activeTab = "characters";
+    private bool createJournal = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -165,9 +179,12 @@
         Navigation.NavigateTo($"/campaigns/{CampaignId}/characters/create");
     }
 
-    private void AddJournal()
+    private void ShowAddJournalSection()
     {
-        
+        Console.WriteLine("Displaying Create Journal Section");
+        createJournal = true;
+        //campaign?.Journal = new();
+        StateHasChanged();
     }
 
     private void ViewCharacter(int characterId)
@@ -175,5 +192,10 @@
         Navigation.NavigateTo($"/characters/{characterId}");
     }
 
-    
+    private void UpdateJournal(JournalDto journal)
+    {
+
+        campaign?.Journal = journal.ToDetalDto();
+        StateHasChanged();
+    }
 }

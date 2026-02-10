@@ -92,10 +92,10 @@ namespace BlazorApp1.Data
                 .HasForeignKey(e => e.JournalId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne<ApplicationUser>()
+                /*entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(e => e.AuthorId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict);*/
             });
 
             modelBuilder.Entity<EntryTag>(entity =>

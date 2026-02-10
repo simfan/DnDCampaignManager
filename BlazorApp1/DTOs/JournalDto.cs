@@ -8,6 +8,21 @@
         public string OwnerId { get; set; }
         public DateTime CreatedAt {  get; set; }
         public DateTime LastUpdatedAt { get; set; }
+
+        public JournalDetailDto ToDetalDto()
+        {
+            return new JournalDetailDto
+            {
+                JournalId = JournalId,
+                Name = Name,
+                JournalTypeId = JournalTypeId,
+                OwnerId = OwnerId,
+                CreatedAt = CreatedAt,
+                LastUpdatedAt = LastUpdatedAt,
+                Entries = new(),
+                Tags = new()
+            };
+        }
     }
 
     public class JournalDetailDto
@@ -20,6 +35,19 @@
         public List<TagDto>? Tags { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime LastUpdatedAt { get; set; }
+
+        public JournalDto ToDto()
+        {
+            return new JournalDto
+            {
+                JournalId = JournalId,
+                Name = Name,
+                JournalTypeId = JournalTypeId,
+                OwnerId = OwnerId,
+                CreatedAt = CreatedAt,
+                LastUpdatedAt = LastUpdatedAt
+            };
+        }
     }
 
     public class CreateJournalDto 
