@@ -1,10 +1,11 @@
 using BlazorApp1.Components;
 using BlazorApp1.Components.Account;
 using BlazorApp1.Data;
-using BlazorApp1.Services;
 using BlazorApp1.Handlers;
+using BlazorApp1.Services;
 using BlazorStrap;
 using BlazorStrap.V5;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,22 @@ builder.Services.AddBlazorStrap();
 
 
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<HttpClient>(sp =>
+{
+    var navigationManager = sp.GetRequiredService<NavigationManager>();
+    var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
+
+    var client = new HttpClient
+    {
+        BaseAddress = new Uri(navigationManager.BaseUri)
+    };
+    var httpContext = httpContextAccessor.HttpContext;
+    if (httpContext?.User?.Identity?.IsAuthenticated == true)
+    {
+    }
+
+    return client;
+});
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 builder.Services.AddScoped<DiceService>();
@@ -47,6 +64,11 @@ builder.Services.AddHttpClient<JournalService>(client =>
 })
 .AddHttpMessageHandler<CookieHandler>();
 
+builder.Services.AddHttpClient<ResourceService>(client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7282/");
+})
+.AddHttpMessageHandler<CookieHandler>();
 
 builder.Services.AddControllers();
 
@@ -79,6 +101,8 @@ builder.Services
         options.DetailedErrors = true;
     });
 
+builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -94,6 +118,12 @@ else
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

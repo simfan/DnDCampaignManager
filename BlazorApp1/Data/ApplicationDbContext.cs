@@ -19,6 +19,8 @@ namespace BlazorApp1.Data
         public DbSet<Journal> Journals { get; set; }
         public DbSet<Entry> Entries { get; set; }
         public DbSet<Tag> Tags { get; set;  }
+        public DbSet<Resource> Resources { get; set; }
+        public DbSet<ResourceShare> ResourceShares { get; set;  }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder); // IMPORTANT: calls Identity configuration
@@ -127,6 +129,50 @@ namespace BlazorApp1.Data
                     .WithMany(t => t.JournalTags)
                     .HasForeignKey(jt => jt.TagId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Resource>(entity =>
+            {
+                entity.HasKey(e => e.ResourceId);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.FileName).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.FilePath).IsRequired().HasMaxLength(1000);
+
+                entity.HasOne(e => e.Campaign)
+                    .WithMany()
+                    .HasForeignKey(e => e.CampaignId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.UploadedBy)
+                    .WithMany()
+                    .HasForeignKey(e => e.UploadedById)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ResourceShare>(entity =>
+            {
+                entity.HasKey(e => e.ResourceId);
+
+                entity.HasOne(e => e.Resource)
+                    .WithMany(r => r.Shares)
+                    .HasForeignKey(e => e.ResourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e =>e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Character)
+                .WithMany()
+                .HasForeignKey(e => e.CharacterId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.SharedBy)
+                .WithMany()
+                .HasForeignKey(e => e.SharedById)
+                .OnDelete(DeleteBehavior.Restrict);
+
             });
         }
     }
