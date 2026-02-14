@@ -19,6 +19,7 @@ namespace BlazorApp1.Data
         public DbSet<Journal> Journals { get; set; }
         public DbSet<Entry> Entries { get; set; }
         public DbSet<Tag> Tags { get; set;  }
+        public DbSet<PlayerEvent> PlayerEvents { get; set; }
         public DbSet<Resource> Resources { get; set; }
         public DbSet<ResourceShare> ResourceShares { get; set;  }
         protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -64,11 +64,19 @@ builder.Services.AddHttpClient<JournalService>(client =>
 })
 .AddHttpMessageHandler<CookieHandler>();
 
+builder.Services.AddHttpClient<PlayerEventService>(client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7282/");
+})
+.AddHttpMessageHandler<CookieHandler>();
+
 builder.Services.AddHttpClient<ResourceService>(client =>
 {
     client.BaseAddress = new Uri("https://localhost:7282/");
 })
 .AddHttpMessageHandler<CookieHandler>();
+
+
 
 builder.Services.AddControllers();
 

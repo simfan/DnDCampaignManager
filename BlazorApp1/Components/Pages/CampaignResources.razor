@@ -42,12 +42,22 @@
             {
                 <div class="col-md-6 col-lg-4 mb-3">
                     <div class="card h-100">
+                        @if(resource.Type == "Image" || resource.Type == "Map")
+                        {
+                            <img src="@GetDownloadUrl(resource.ResourceId)"
+                                 class="card-img-top"
+                                 alt="@resource.Name"
+                                 style="max-height: 200px; object-fit: cover; cursor: pointer;"
+                                 @onclick="() => ShowImageModal(resource)" />
+                        }
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <h5 class="card-title">@resource.Name</h5>
+                                
                                 @if (resource.Type == "Image")
                                 {
                                     <i class="bi bi-image text-primary"></i>
+                                    
                                 }
                                 else if (resource.Type == "Document")
                                 {
@@ -61,8 +71,11 @@
                                 {
                                     <i class="bi bi-music-note text-warning"></i>
                                 }
+                                else
+                                {
+                                    <span>????</span>
+                                }
                             </div>
-                            
                             <p class="card-text text-muted small">@resource.Description</p>
                             
                             <div class="mb-2">
@@ -238,6 +251,29 @@
             </div>
         </div>
     </div>
+    }<!-- Image Preview Modal -->
+    @if (showImageModal && selectedImageResource != null)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.8);" @onclick="CloseImageModal">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content bg-transparent border-0" @onclick:stopPropagation="true">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title text-white">@selectedImageResource.Name</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="CloseImageModal"></button>
+                    </div>
+                    <div class="modal-body text-center p-0">
+                        <img src="@GetDownloadUrl(selectedImageResource.ResourceId)"
+                             class="img-fluid"
+                             alt="@selectedImageResource.Name"
+                             style="max-height: 80vh; width: auto;" />
+                    </div>
+                    <div class="modal-footer border-0 justify-content-center">
+                        <p class="text-white mb-0">@selectedImageResource.Description</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
 }
 
 @code {
@@ -266,6 +302,9 @@
     private List<CampaignMemberDto> campaignMembers = new();
     private List<CharacterDto> campaignCharacters = new();
     private bool isLoading = true;
+
+    private bool showImageModal = false;
+    private ResourceDto? selectedImageResource;
 
     private AntiforgeryRequestToken antiforgeryToken;
     // Upload modal
@@ -382,7 +421,7 @@
             isUploading = false;
         }
     }
-    
+
     private void ShowShareModal(ResourceDto resource)
     {
         selectedResource = resource;
@@ -391,13 +430,25 @@
         selectedCharacterIds = resource.Shares.Where(s => s.CharacterId != null).Select(s => s.CharacterId!.Value).ToList();
         showShareModal = true;
     }
-    
+
     private void CloseShareModal()
     {
         showShareModal = false;
         selectedResource = null;
     }
-    
+
+    private void ShowImageModal(ResourceDto resource)
+    {
+        selectedImageResource = resource;
+        showImageModal = true;
+    }
+
+    private void CloseImageModal()
+    {
+        showImageModal = false;
+        selectedImageResource = null;
+    }
+
     private void ToggleUser(string userId, ChangeEventArgs e)
     {
         if ((bool)e.Value!)
@@ -410,7 +461,7 @@
             selectedUserIds.Remove(userId);
         }
     }
-    
+
     private void ToggleCharacter(int characterId, ChangeEventArgs e)
     {
         if ((bool)e.Value!)
@@ -423,11 +474,11 @@
             selectedCharacterIds.Remove(characterId);
         }
     }
-    
+
     private async Task ShareResource()
     {
         if (selectedResource == null) return;
-        
+
         var shareDto = new ShareResourceDto
         {
             ResourceId = selectedResource.ResourceId,
@@ -435,9 +486,9 @@
             UserIds = shareType == "SpecificUsers" ? selectedUserIds : null,
             CharacterIds = shareType == "SpecificCharacters" ? selectedCharacterIds : null
         };
-        
-        var response = await Http.PostAsJsonAsync($"api/Resources/{selectedResource.ResourceId}/share", shareDto);
-        
+
+        //var response = await Http.PostAsJsonAsync($"api/Resources/{selectedResource.ResourceId}/share", shareDto);
+        var response = await ResourceService.ShareResource(selectedResource.ResourceId, shareDto);
         if (response.IsSuccessStatusCode)
         {
             await LoadResources();
