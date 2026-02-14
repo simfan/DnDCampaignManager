@@ -14,5 +14,13 @@ namespace BlazorApp1.Services
         {
             return await _httpClient.GetFromJsonAsync<List<ResourceDto>>($"api/Resources/Campaign/{campaignId}");
         }
+
+        public async Task<HttpResponseMessage> ShareResource(int resourceId, ShareResourceDto shareDto)
+        {
+            var response = await _httpClient.PostAsJsonAsync($"api/Resources/{resourceId}/share", shareDto);
+            response.EnsureSuccessStatusCode();
+
+            return response;
+        }
     }
 }
