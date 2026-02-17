@@ -22,4 +22,8 @@
     <Folder Include="Uploads\Resources\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="wwwroot\js\Home.js" />
+  </ItemGroup>
+
 </Project>

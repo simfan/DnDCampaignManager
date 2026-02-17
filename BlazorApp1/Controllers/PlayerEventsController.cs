@@ -1,11 +1,14 @@
-﻿using BlazorApp1.Data;
+﻿using BlazorApp1.Conversions;
+using BlazorApp1.Data;
 using BlazorApp1.DTOs;
+using BlazorApp1.Helpers;
 using BlazorApp1.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.Design;
 using System.Security.Claims;
-
+using BlazorApp1.Helpers;
 namespace BlazorApp1.Controllers
 {
     [Authorize]
@@ -120,6 +123,100 @@ namespace BlazorApp1.Controllers
             return Ok(eventDto);
         }
 
+        //GET: api/PlayerEvents/{id}/export
+        [HttpGet("{id}/export")]
+        public async Task<IActionResult> ExportEvent(int id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var playerEvent = await _context.PlayerEvents
+                .Include(e => e.Campaign)
+                .FirstOrDefaultAsync(e => e.PlayerEventId == id);
+
+            if (playerEvent == null)
+            {
+                return NotFound();
+            }
+
+            if(playerEvent.UserId != userId)
+            {
+                return Forbid();
+            }
+
+            var eventDto = PlayerEventConversions.PlayerEventToDto(playerEvent);
+
+            var icsContent = IcsFileGenerator.GenerateIcsFile(eventDto);
+            var fileName = $"{SanitizeFileName(playerEvent.Title)}_{playerEvent.EventDate:yyyy-MM-dd}.ics";
+            return File(
+       System.Text.Encoding.UTF8.GetBytes(icsContent),
+       "text/calendar",
+       fileName
+   );
+        }
+        //GET: api/PlayerEvents/{id}/export/all
+        [HttpGet("{id}/export/all")]
+        public async Task<IActionResult> ExportAllEvents()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var events = await _context.PlayerEvents
+                .Include(e => e.Campaign)
+                .Where(e => e.UserId == userId)
+                .OrderBy(e => e.EventDate)
+                .ToListAsync();
+
+            if (!events.Any())
+            {
+                return NotFound("No events found to export.");
+            }
+            List<PlayerEventDto> eventDtos = new();
+            foreach (var thisEvent in events)
+            {
+                var eventDto = PlayerEventConversions.PlayerEventToDto(thisEvent);
+                eventDtos.Add(eventDto);
+            }
+
+            var icsContent = IcsFileGenerator.GenerateIcsFile(eventDtos);
+            var fileName = $"DnD_Events_{DateTime.Now:yyyy-MM-dd}.ics";
+
+            return File(
+                System.Text.Encoding.UTF8.GetBytes(icsContent),
+                "text/calendar",
+                fileName
+            );
+        }
+            //GET: api/PlayerEvents/{id}/export/upcoming
+            [HttpGet("{id}/export/upcoming")]
+        public async Task<IActionResult> ExportUpcomingEvents()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var events = await _context.PlayerEvents
+                .Include(e => e.Campaign)
+                .Where(e => e.UserId == userId && e.EventDate >= DateTime.Today)
+                .OrderBy(e => e.EventDate)
+                .ToListAsync();
+
+            if (!events.Any())
+            {
+                return NotFound("No upcoming events found to export.");
+            }
+            List<PlayerEventDto> eventDtos = new();
+            foreach (var thisEvent in events)
+            {
+                var eventDto = PlayerEventConversions.PlayerEventToDto(thisEvent);
+                eventDtos.Add(eventDto);
+            }
+
+            var icsContent = IcsFileGenerator.GenerateIcsFile(eventDtos);
+            var fileName = $"DnD_Events_{DateTime.Now:yyyy-MM-dd}.ics";
+
+            return File(
+                System.Text.Encoding.UTF8.GetBytes(icsContent),
+                "text/calendar",
+                fileName
+            );
+        }
         // POST: api/PlayerEvents
         [HttpPost]
         public async Task<ActionResult<PlayerEventDto>> CreatePlayerEvent(CreatePlayerEventDto createDto)
@@ -254,6 +351,13 @@ namespace BlazorApp1.Controllers
         private bool PlayerEventExists(int id)
         {
             return _context.PlayerEvents.Any(e => e.PlayerEventId == id);
+        }
+
+        private static string SanitizeFileName(string fileName)
+        {
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            return sanitized.Length > 50 ? sanitized.Substring(0, 50) : sanitized;
         }
     }
 }

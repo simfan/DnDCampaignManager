@@ -27,6 +27,37 @@ namespace BlazorApp1.Services
             return await _httpClient.GetFromJsonAsync<PlayerEventDto>($"api/playerevents/{id}");
         }
 
+
+        public async Task<byte[]?> ExportEventAsync(int id)
+        {
+            var response = await _httpClient.GetAsync($"api/PlayerEvents/{id}/export");
+            if(response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsByteArrayAsync();
+            }
+            return null;
+        }
+
+        public async Task<byte[]?> ExportAllEventsAsync()
+        {
+            var response = await _httpClient.GetAsync("api/PlayerEvents/export/all");
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsByteArrayAsync();
+            }
+            return null;
+        }
+
+        public async Task<byte[]?> ExportUpcomingEventsAsync()
+        {
+            var response = await _httpClient.GetAsync("api/PlayerEvents/export/upcoming");
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsByteArrayAsync();
+            }
+            return null;
+        }
+
         public async Task<PlayerEventDto?> CreateEventAsync(CreatePlayerEventDto playerEvent)
         {
             var response = await _httpClient.PostAsJsonAsync("api/playerevents", playerEvent);
