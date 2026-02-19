@@ -46,6 +46,7 @@ namespace BlazorApp1.Services
         public async Task<List<dynamic>> GetCampaignMembersAsync(int campaignId)
         {
             return await _httpClient.GetFromJsonAsync<List<dynamic>>($"api/Chat/campaigns/{campaignId}/members");
+        
         }
     }
 }

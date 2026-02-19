@@ -123,6 +123,16 @@ builder.Services
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
 builder.Services.AddSignalR();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("StreamDeckLocal", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost", "http://127.0.0.1", "https://localhost", "https://localhost:7282")
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
 
 
 var app = builder.Build();
@@ -142,6 +152,8 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
+app.UseCors("StreamDeckLocal");
 
 app.UseAuthentication();
 app.UseAuthorization();
