@@ -1,11 +1,13 @@
 ﻿using BlazorApp1.Data;
 using BlazorApp1.DTOs;
 using BlazorApp1.Models;
+using BlazorApp1.Conversions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace BlazorApp1.Controllers
 {
@@ -23,7 +25,7 @@ namespace BlazorApp1.Controllers
 
         // GET: api/Characters
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Character>>> GetCharacters()
+        public async Task<ActionResult<IEnumerable<CharacterDto>>> GetCharacters()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -36,7 +38,7 @@ namespace BlazorApp1.Controllers
 
             var characterDtos = characters.Select(c => MapToCharacterDto(c)).ToList();
 
-            return Ok(characters);
+            return Ok(characterDtos);
         }
 
         // GET: api/Characters/5
@@ -95,7 +97,28 @@ namespace BlazorApp1.Controllers
 
             return Ok(characters);
         }
+        [HttpGet("User")]
+        public async Task<ActionResult<IEnumerable<CharacterDto>>> GetCharactersForCurrentUser()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var characters = await GetCharactersByUser(userId);
+            return characters;
+        }
 
+        [HttpGet("User/{id}")]
+        public async Task<ActionResult<IEnumerable<CharacterDto>>> GetCharactersByUser(string id)
+        {
+            var characters = await _context.Characters
+                .Where(c => c.PlayerId == id)
+                .ToListAsync();
+            var characterDtos = new List<CharacterDto>();
+            /*foreach(var character in characters)
+            {
+                var characterDto = await CharacterConversions.ConvertToCharacterDto(character);
+                characterDtos.Add(characterDto);
+            }*/
+            return characterDtos;
+        }
         // POST: api/Characters
         [HttpPost]
         public async Task<ActionResult<CharacterDto>> CreateCharacter(CreateCharacterDto createdCharacter)
@@ -144,12 +167,12 @@ namespace BlazorApp1.Controllers
 
         // PUT: api/Characters/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateCharacter(int id, Character character)
+        public async Task<ActionResult<IEnumerable<CharacterDto>>> UpdateCharacter(int id, UpdateCharacterDto character)
         {
-            if (id != character.CharacterId)
+            /*if (id != character.CharacterId)
             {
                 return BadRequest();
-            }
+            }*/
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -185,18 +208,33 @@ namespace BlazorApp1.Controllers
             existingCharacter.CurrentHitPoints = character.CurrentHitPoints;
             existingCharacter.LastUpdatedDate = DateTime.UtcNow;
 
-            try
+            if(character.Skills?.Count > 0)
             {
-                await _context.SaveChangesAsync();
+                existingCharacter.SkillsJson = JsonSerializer.Serialize(character.Skills);
             }
-            catch (DbUpdateConcurrencyException)
+            _context.CharacterClasses.RemoveRange(existingCharacter.Classes);
+            foreach (var classDto in character.Classes)
             {
-                if (!CharacterExists(id))
+                var characterClass = new CharacterClass
                 {
-                    return NotFound();
-                }
-                throw;
+                    CharacterId = existingCharacter.CharacterId,
+                    Name = classDto.Name,
+                    Level = classDto.Level
+                };
+                _context.CharacterClasses.Add(characterClass);
             }
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!CharacterExists(id))
+                    {
+                        return NotFound();
+                    }
+                    throw;
+                }
 
             return NoContent();
         }
@@ -232,35 +270,48 @@ namespace BlazorApp1.Controllers
 
         private CharacterDto MapToCharacterDto(Character character)
         {
-            return new CharacterDto
+            List<Skill> skills;
             {
-                CharacterId = character.CharacterId,
-                Name = character.Name,
-                Race = character.Race,
-                ExperiencePoints = character.ExperiencePoints,
-                TotalLevel = character.Classes.Sum(c => c.Level),
-                Classes = character.Classes.Select(cc => new CharacterClassDto
+                try
                 {
-                    CharacterClassId = cc.CharacterClassId,
-                    Name = cc.Name,
-                    Level = cc.Level
-                }).ToList(),
-                Strength = character.Strength,
-                Dexterity = character.Dexterity,
-                Constitution = character.Constitution,
-                Intelligence = character.Intelligence,
-                Wisdom = character.Wisdom,
-                Charisma = character.Charisma,
-                ArmorClass = character.ArmorClass,
-                MaxHitPoints = character.MaxHitPoints,
-                CurrentHitPoints = character.CurrentHitPoints,
-                CampaignId = character.CampaignId,
-                CampaignName = character.Campaign?.Name ?? "Unknown",
-                PlayerId = character.PlayerId,
-                PlayerName = character.Player?.UserName ?? "Unknown",
-                CreatedDate = character.CreatedDate,
-                LastModifiedDate = character.LastUpdatedDate
-            };
+                    skills = !string.IsNullOrEmpty(character.SkillsJson)
+                    ? JsonSerializer.Deserialize<List<Skill>>(character.SkillsJson) ?? SkillDefinitions.GetAllSkills()
+                    : SkillDefinitions.GetAllSkills();
+                }
+                catch
+                {
+                    skills = SkillDefinitions.GetAllSkills();
+                }
+                return new CharacterDto
+                {
+                    CharacterId = character.CharacterId,
+                    Name = character.Name,
+                    Race = character.Race,
+                    ExperiencePoints = character.ExperiencePoints,
+                    TotalLevel = character.Classes.Sum(c => c.Level),
+                    Classes = character.Classes.Select(cc => new CharacterClassDto
+                    {
+                        CharacterClassId = cc.CharacterClassId,
+                        Name = cc.Name,
+                        Level = cc.Level
+                    }).ToList(),
+                    Strength = character.Strength,
+                    Dexterity = character.Dexterity,
+                    Constitution = character.Constitution,
+                    Intelligence = character.Intelligence,
+                    Wisdom = character.Wisdom,
+                    Charisma = character.Charisma,
+                    ArmorClass = character.ArmorClass,
+                    MaxHitPoints = character.MaxHitPoints,
+                    CurrentHitPoints = character.CurrentHitPoints,
+                    CampaignId = character.CampaignId,
+                    CampaignName = character.Campaign?.Name ?? "Unknown",
+                    PlayerId = character.PlayerId,
+                    PlayerName = character.Player?.UserName ?? "Unknown",
+                    CreatedDate = character.CreatedDate,
+                    LastModifiedDate = character.LastUpdatedDate
+                };
+            }
         }
     }
 }

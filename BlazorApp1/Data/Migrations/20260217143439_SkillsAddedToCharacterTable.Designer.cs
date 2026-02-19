@@ -4,6 +4,7 @@ using BlazorApp1.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BlazorApp1.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260217143439_SkillsAddedToCharacterTable")]
+    partial class SkillsAddedToCharacterTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -258,112 +261,6 @@ namespace BlazorApp1.Migrations
                     b.HasIndex("CharacterId");
 
                     b.ToTable("CharacterClasses");
-                });
-
-            modelBuilder.Entity("BlazorApp1.Models.ChatMessage", b =>
-                {
-                    b.Property<int>("ChatMessageId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ChatMessageId"));
-
-                    b.Property<int>("ChatRoomId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("EditedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsEdited")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("SenderId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("SentAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("ChatMessageId");
-
-                    b.HasIndex("ChatRoomId");
-
-                    b.HasIndex("SenderId");
-
-                    b.ToTable("ChatMessages");
-                });
-
-            modelBuilder.Entity("BlazorApp1.Models.ChatRoom", b =>
-                {
-                    b.Property<int>("ChatRoomId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ChatRoomId"));
-
-                    b.Property<int?>("CampaignId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedById")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime?>("LastMessageAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
-
-                    b.HasKey("ChatRoomId");
-
-                    b.HasIndex("CampaignId");
-
-                    b.HasIndex("CreatedById");
-
-                    b.ToTable("ChatRooms");
-                });
-
-            modelBuilder.Entity("BlazorApp1.Models.ChatRoomMember", b =>
-                {
-                    b.Property<int>("ChatRoomMemberId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ChatRoomMemberId"));
-
-                    b.Property<int>("ChatRoomId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("JoinedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("LastReadAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("ChatRoomMemberId");
-
-                    b.HasIndex("ChatRoomId");
-
-                    b.HasIndex("UserId", "ChatRoomId")
-                        .IsUnique();
-
-                    b.ToTable("ChatRoomMembers");
                 });
 
             modelBuilder.Entity("BlazorApp1.Models.Entry", b =>
@@ -840,62 +737,6 @@ namespace BlazorApp1.Migrations
                     b.Navigation("Character");
                 });
 
-            modelBuilder.Entity("BlazorApp1.Models.ChatMessage", b =>
-                {
-                    b.HasOne("BlazorApp1.Models.ChatRoom", "ChatRoom")
-                        .WithMany("Messages")
-                        .HasForeignKey("ChatRoomId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BlazorApp1.Data.ApplicationUser", "Sender")
-                        .WithMany()
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("ChatRoom");
-
-                    b.Navigation("Sender");
-                });
-
-            modelBuilder.Entity("BlazorApp1.Models.ChatRoom", b =>
-                {
-                    b.HasOne("BlazorApp1.Models.Campaign", "Campaign")
-                        .WithMany()
-                        .HasForeignKey("CampaignId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("BlazorApp1.Data.ApplicationUser", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Campaign");
-
-                    b.Navigation("CreatedBy");
-                });
-
-            modelBuilder.Entity("BlazorApp1.Models.ChatRoomMember", b =>
-                {
-                    b.HasOne("BlazorApp1.Models.ChatRoom", "ChatRoom")
-                        .WithMany("Members")
-                        .HasForeignKey("ChatRoomId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BlazorApp1.Data.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ChatRoom");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("BlazorApp1.Models.Entry", b =>
                 {
                     b.HasOne("BlazorApp1.Models.Journal", "Journal")
@@ -1135,13 +976,6 @@ namespace BlazorApp1.Migrations
             modelBuilder.Entity("BlazorApp1.Models.Character", b =>
                 {
                     b.Navigation("Classes");
-                });
-
-            modelBuilder.Entity("BlazorApp1.Models.ChatRoom", b =>
-                {
-                    b.Navigation("Members");
-
-                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("BlazorApp1.Models.Entry", b =>

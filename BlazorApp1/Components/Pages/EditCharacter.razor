@@ -1,0 +1,389 @@
+﻿@page "/characters/{CharacterId:int}/edit"
+@rendermode InteractiveServer
+@using BlazorApp1.DTOs
+@using BlazorApp1.Models
+@using BlazorApp1.Services
+@using Microsoft.AspNetCore.Authorization
+@inject CharacterService CharacterService
+@inject NavigationManager Navigation
+@attribute [Authorize]
+
+<PageTitle>Edit Character</PageTitle>
+
+<div class="container mt-4">
+    <div class="mb-4">
+        <button class="btn btn-outline-secondary mb-3" @onclick="GoBack">
+            <i class="bi bi-arrow-left"></i> Back
+        </button>
+
+        <h1>Edit Character</h1>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (characterDto == null)
+    {
+        <div class="alert alert-danger">Character not found.</div>
+    }
+    else
+    {
+        <EditForm Model="characterDto" OnValidSubmit="UpdateCharacter">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Basic Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Character Name *</label>
+                                <InputText class="form-control" @bind-Value="characterDto.Name" />
+                                <ValidationMessage For="@(() => characterDto.Name)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Race *</label>
+                                <InputText class="form-control" @bind-Value="characterDto.Race" placeholder="e.g., Human, Elf, Dwarf" />
+                                <ValidationMessage For="@(() => characterDto.Race)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Experience Points</label>
+                                <InputNumber class="form-control" @bind-Value="characterDto.ExperiencePoints" min="0" />
+                                <ValidationMessage For="@(() => characterDto.ExperiencePoints)" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Classes</h5>
+                            <button type="button" class="btn btn-sm btn-secondary" @onclick="AddClass">
+                                <i class="bi bi-plus"></i> Add Class
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            @foreach (var characterClass in characterDto.Classes)
+                            {
+                                <div class="row mb-2">
+                                    <div class="col-8">
+                                        <input type="text" class="form-control" placeholder="Class name" @bind="characterClass.Name" />
+                                    </div>
+                                    <div class="col-3">
+                                        <input type="number" class="form-control" placeholder="Level" min="1" max="20" @bind="characterClass.Level" />
+                                    </div>
+                                    <div class="col-1">
+                                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveClass(characterClass)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            @if (characterDto.Classes.Count == 0)
+                            {
+                                <div class="text-danger small mt-2">At least one class is required</div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Skills</h5>
+                            <button type="button" class="btn btn-sm btn-secondary" @onclick="ToggleSkillManager">
+                                <i class="bi bi-gear"></i> Manage Proficiencies
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-2">Proficiency Bonus: +@GetProficiencyBonus()</p>
+                            <div class="row">
+                                @foreach (var skill in characterDto.Skills.OrderBy(s => s.Name))
+                                {
+                                    var abilityMod = GetAbilityModifier(skill.AbilityScore);
+                                    var profBonus = GetProficiencyBonus();
+                                    var totalMod = abilityMod + (skill.IsProficient ? (skill.HasExpertise ? profBonus * 2 : profBonus) : 0);
+
+                                    <div class="col-6 mb-1">
+                                        <small>
+                                            @if (skill.HasExpertise)
+                                            {
+                                                <i class="bi bi-star-fill text-warning" title="Expertise"></i>
+                                            }
+                                            else if (skill.IsProficient)
+                                            {
+                                                <i class="bi bi-circle-fill text-primary" title="Proficient" style="font-size: 0.5rem;"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-circle text-muted" title="Not Proficient" style="font-size: 0.5rem;"></i>
+                                            }
+                                            @skill.Name
+                                            <span class="badge @(totalMod >= 0 ? "bg-success" : "bg-danger") badge-sm">
+                                                @(totalMod >= 0 ? "+" : "")@totalMod
+                                            </span>
+                                        </small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Ability Scores</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <label class="form-label">Strength</label>
+                                    <InputNumber class="form-control" @bind-Value="characterDto.Strength" min="1" max="30" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Dexterity</label>
+                                    <InputNumber class="form-control" @bind-Value="characterDto.Dexterity" min="1" max="30" />
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <label class="form-label">Constitution</label>
+                                    <InputNumber class="form-control" @bind-Value="characterDto.Constitution" min="1" max="30" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Intelligence</label>
+                                    <InputNumber class="form-control" @bind-Value="characterDto.Intelligence" min="1" max="30" />
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <label class="form-label">Wisdom</label>
+                                    <InputNumber class="form-control" @bind-Value="characterDto.Wisdom" min="1" max="30" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Charisma</label>
+                                    <InputNumber class="form-control" @bind-Value="characterDto.Charisma" min="1" max="30" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Combat Stats</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Armor Class</label>
+                                <InputNumber class="form-control" @bind-Value="characterDto.ArmorClass" min="1" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Max Hit Points</label>
+                                <InputNumber class="form-control" @bind-Value="characterDto.MaxHitPoints" min="1" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Current Hit Points</label>
+                                <InputNumber class="form-control" @bind-Value="characterDto.CurrentHitPoints" min="0" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" @onclick="GoBack">Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled="@(characterDto.Classes.Count == 0 || isSaving)">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Update Character
+                </button>
+            </div>
+        </EditForm>
+    }
+
+    @if (showSkillManager)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Manage Skill Proficiencies</h5>
+                        <button type="button" class="btn-close" @onclick="ToggleSkillManager"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted">Set proficiency level for each skill.</p>
+                        <div class="list-group">
+                            @foreach (var skill in characterDto.Skills.OrderBy(s => s.Name))
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>@skill.Name</strong>
+                                            <small class="text-muted ms-1">(@skill.AbilityScore)</small>
+                                        </div>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn @(!skill.IsProficient ? "btn-secondary" : "btn-outline-secondary")"
+                                                    @onclick="@(() => SetSkillProficiency(skill, false, false))">
+                                                None
+                                            </button>
+                                            <button class="btn @(skill.IsProficient && !skill.HasExpertise ? "btn-primary" : "btn-outline-primary")"
+                                                    @onclick="@(() => SetSkillProficiency(skill, true, false))">
+                                                Proficient
+                                            </button>
+                                            <button class="btn @(skill.HasExpertise ? "btn-warning" : "btn-outline-warning")"
+                                                    @onclick="@(() => SetSkillProficiency(skill, true, true))">
+                                                Expertise
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="ToggleSkillManager">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int CharacterId { get; set; }
+
+    private UpdateCharacterDto characterDto = new();
+    private CharacterDto? originalCharacter;
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool showSkillManager = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCharacter();
+    }
+
+    private async Task LoadCharacter()
+    {
+        isLoading = true;
+        try
+        {
+            originalCharacter = await CharacterService.GetCharacterAsync(CharacterId);
+
+            if (originalCharacter != null)
+            {
+                // Map CharacterDto to UpdateCharacterDto
+                characterDto = new UpdateCharacterDto
+                {
+                    Name = originalCharacter.Name,
+                    Race = originalCharacter.Race,
+                    ExperiencePoints = originalCharacter.ExperiencePoints,
+                    Classes = originalCharacter.Classes.Select(c => new CharacterClassDto
+                    {
+                        CharacterClassId = c.CharacterClassId,
+                        Name = c.Name,
+                        Level = c.Level
+                    }).ToList(),
+                    Strength = originalCharacter.Strength,
+                    Dexterity = originalCharacter.Dexterity,
+                    Constitution = originalCharacter.Constitution,
+                    Intelligence = originalCharacter.Intelligence,
+                    Wisdom = originalCharacter.Wisdom,
+                    Charisma = originalCharacter.Charisma,
+                    ArmorClass = originalCharacter.ArmorClass,
+                    MaxHitPoints = originalCharacter.MaxHitPoints,
+                    CurrentHitPoints = originalCharacter.CurrentHitPoints,
+                    Skills = originalCharacter.Skills?.Count > 0
+                        ? originalCharacter.Skills
+                        : SkillDefinitions.GetAllSkills()
+                };
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void AddClass()
+    {
+        characterDto.Classes.Add(new CharacterClassDto { Level = 1 });
+    }
+
+    private void RemoveClass(CharacterClassDto characterClass)
+    {
+        characterDto.Classes.Remove(characterClass);
+    }
+
+    private int GetProficiencyBonus()
+    {
+        int totalLevel = characterDto.Classes.Sum(c => c.Level);
+        return totalLevel switch
+        {
+            <= 4 => 2,
+            <= 8 => 3,
+            <= 12 => 4,
+            <= 16 => 5,
+            _ => 6
+        };
+    }
+
+    private int GetAbilityModifier(string abilityScore)
+    {
+        int score = abilityScore switch
+        {
+            "STR" => characterDto.Strength,
+            "DEX" => characterDto.Dexterity,
+            "CON" => characterDto.Constitution,
+            "INT" => characterDto.Intelligence,
+            "WIS" => characterDto.Wisdom,
+            "CHA" => characterDto.Charisma,
+            _ => 10
+        };
+        return (score - 10) / 2;
+    }
+
+    private void ToggleSkillManager()
+    {
+        showSkillManager = !showSkillManager;
+    }
+
+    private void SetSkillProficiency(Skill skill, bool proficient, bool expertise)
+    {
+        skill.IsProficient = proficient;
+        skill.HasExpertise = expertise;
+        StateHasChanged();
+    }
+
+    private async Task UpdateCharacter()
+    {
+        if (characterDto.Classes.Count == 0)
+            return;
+
+        isSaving = true;
+        try
+        {
+            await CharacterService.UpdateCharacterAsync(CharacterId, characterDto);
+            Navigation.NavigateTo($"/characters/{CharacterId}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo($"/characters/{CharacterId}");
+    }
+}

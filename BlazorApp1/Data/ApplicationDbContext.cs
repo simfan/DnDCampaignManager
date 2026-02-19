@@ -15,6 +15,9 @@ namespace BlazorApp1.Data
         public DbSet<Campaign> Campaigns { get; set; }
         public DbSet<Character> Characters { get; set; }
         public DbSet<CharacterClass> CharacterClasses { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<ChatRoom> ChatRooms { get; set; }
+        public DbSet<ChatRoomMember> ChatRoomMembers { get; set; }
         public DbSet<CampaignMember> CampaignMembers { get; set; }
         public DbSet<Journal> Journals { get; set; }
         public DbSet<Entry> Entries { get; set; }
@@ -66,6 +69,57 @@ namespace BlazorApp1.Data
                 entity.HasOne(e => e.Character)
                     .WithMany(c => c.Classes)
                     .HasForeignKey(e => e.CharacterId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ChatRoom Configuration
+            modelBuilder.Entity<ChatRoom>(entity =>
+            {
+                entity.HasKey(e => e.ChatRoomId);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+
+                entity.HasOne(e => e.CreatedBy)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedById)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Campaign)
+                    .WithMany()
+                    .HasForeignKey(e => e.CampaignId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ChatMessage Configuration
+            modelBuilder.Entity<ChatMessage>(entity =>
+            {
+                entity.HasKey(e => e.ChatMessageId);
+                entity.Property(e => e.Content).IsRequired();
+
+                entity.HasOne(e => e.ChatRoom)
+                    .WithMany(r => r.Messages)
+                    .HasForeignKey(e => e.ChatRoomId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Sender)
+                    .WithMany()
+                    .HasForeignKey(e => e.SenderId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ChatRoomMember Configuration
+            modelBuilder.Entity<ChatRoomMember>(entity =>
+            {
+                entity.HasKey(e => e.ChatRoomMemberId);
+                entity.HasIndex(e => new { e.UserId, e.ChatRoomId }).IsUnique();
+
+                entity.HasOne(e => e.ChatRoom)
+                    .WithMany(r => r.Members)
+                    .HasForeignKey(e => e.ChatRoomId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 

@@ -1,8 +1,11 @@
-﻿@inherits LayoutComponentBase
+﻿@using BlazorApp1.Components
+@inherits LayoutComponentBase
 
 <div class="page">
     <div class="sidebar">
         <NavMenu />
+      
+
     </div>
 
     <main>
@@ -15,6 +18,8 @@
         </article>
     </main>
 </div>
+
+<Chat />
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

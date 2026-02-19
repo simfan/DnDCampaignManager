@@ -2,6 +2,7 @@ using BlazorApp1.Components;
 using BlazorApp1.Components.Account;
 using BlazorApp1.Data;
 using BlazorApp1.Handlers;
+using BlazorApp1.Hubs;
 using BlazorApp1.Services;
 using BlazorStrap;
 using BlazorStrap.V5;
@@ -20,6 +21,7 @@ builder.Services.AddBlazorStrap();
 
 
 builder.Services.AddCascadingAuthenticationState();
+
 builder.Services.AddScoped<HttpClient>(sp =>
 {
     var navigationManager = sp.GetRequiredService<NavigationManager>();
@@ -39,6 +41,10 @@ builder.Services.AddScoped<HttpClient>(sp =>
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 builder.Services.AddScoped<DiceService>();
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(builder.Configuration["FrontendUrl"] ?? "https://localhost:7282")
+});
 
 
 // Add HttpContextAccessor and CookieHandler
@@ -58,6 +64,11 @@ builder.Services.AddHttpClient<CharacterService>(client =>
 })
 .AddHttpMessageHandler<CookieHandler>();
 ;
+builder.Services.AddHttpClient<ChatService>(client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7282/");
+})
+.AddHttpMessageHandler<CookieHandler>();
 builder.Services.AddHttpClient<JournalService>(client =>
 { 
     client.BaseAddress = new Uri("https://localhost:7282/");
@@ -111,6 +122,9 @@ builder.Services
 
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
+builder.Services.AddSignalR();
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -139,5 +153,6 @@ app.MapRazorComponents<App>()
 
 app.MapAdditionalIdentityEndpoints();
 app.MapControllers();
+app.MapHub<ChatHub>("/chathub");
 
 app.Run();
