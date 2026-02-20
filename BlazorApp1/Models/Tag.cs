@@ -6,5 +6,8 @@ namespace BlazorApp1.Models
     {
         public int TagId { get; set; }
         public string Name { get; set; } = string.Empty;
+
+        public List<JournalTag>? JournalTags { get; set; }
+        public List<EntryTag>? EntryTags { get; set; }
     }
 }

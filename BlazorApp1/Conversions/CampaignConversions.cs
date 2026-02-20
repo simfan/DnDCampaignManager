@@ -1,4 +1,5 @@
-﻿using BlazorApp1.DTOs;
+﻿using BlazorApp1.Conversions;
+using BlazorApp1.DTOs;
 using BlazorApp1.Models;
 
 namespace BlazorApp1.Components
@@ -40,6 +41,10 @@ namespace BlazorApp1.Components
 
         public CampaignDetailDto CampaignToDetailDto(Campaign campaign)
         {
+
+            JournalDetailDto? journalDetailDto = null;
+            if (campaign.Journal != null)
+                journalDetailDto = JournalConversions.JournalToDetailDto(campaign.Journal);
             var dto = new CampaignDetailDto 
             {
                 CampaignId = campaign.CampaignId,
@@ -49,6 +54,7 @@ namespace BlazorApp1.Components
                 CreatedDate = campaign.CreatedDate,
                 LastModifiedDate = campaign.LastModifiedDate,
                 IsActive= campaign.IsActive,
+                Journal = journalDetailDto
             };
             //dto.Characters 
             //dto.Members

@@ -1,7 +1,802 @@
 ﻿@page "/"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using BlazorApp1.DTOs
+@using BlazorApp1.Models
+@using BlazorApp1.Services
+@inject CampaignService CampaignService
+@inject CharacterService CharacterService
+@inject IJSRuntime JS
+@inject PlayerEventService EventService
+@inject NavigationManager Navigation
+@attribute [Authorize]
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Player Hub</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="container-fluid mt-4">
+    <div class="mb-4">
+        <h1>Player Hub</h1>
+        <p class="text-muted">Welcome back! Here's an overview of your campaigns, events, and characters.</p>
+    </div>
 
-Welcome to your new app.
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <!-- Left Column: Campaigns and Characters -->
+            <div class="col-lg-6">
+                <!-- Campaigns Section -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-map"></i> My Campaigns
+                        </h5>
+                        <button class="btn btn-sm btn-primary" @onclick='() => Navigation.NavigateTo("/campaigns")'>
+                            View All
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (campaigns.Count == 0)
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-map" style="font-size: 3rem;"></i>
+                                <p class="mt-2">No campaigns yet</p>
+                                <button class="btn btn-outline-primary btn-sm" @onclick='() => Navigation.NavigateTo("/campaigns")'>
+                                    Create Your First Campaign
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var campaign in campaigns.Take(5))
+                                {
+                                    <div class="list-group-item list-group-item-action"
+                                         style="cursor: pointer;"
+                                         @onclick='() => Navigation.NavigateTo($"/campaigns/{campaign.CampaignId}")'>
+                                        <div class="d-flex w-100 justify-content-between align-items-center">
+                                            <h6 class="mb-1">@campaign.Name</h6>
+                                            @if (!campaign.IsActive)
+                                            {
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            }
+                                        </div>
+                                        <p class="mb-1 small text-muted">@campaign.Description</p>
+                                        <small class="text-muted">
+                                            <i class="bi bi-people"></i> @campaign.MemberCount members •
+                                            <i class="bi bi-person"></i> @campaign.CharacterCount characters
+                                        </small>
+                                    </div>
+                                }
+                                @if (campaigns.Count > 5)
+                                {
+                                    <div class="list-group-item text-center">
+                                        <small class="text-muted">+@(campaigns.Count - 5) more campaigns</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Characters Section (Moved under Campaigns) -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-person-badge"></i> My Characters
+                        </h5>
+                        <button class="btn btn-sm btn-primary" @onclick='() => Navigation.NavigateTo("/characters/create")'>
+                            Create New
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (characters.Count == 0)
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-person-badge" style="font-size: 3rem;"></i>
+                                <p class="mt-2">No characters yet</p>
+                                <button class="btn btn-outline-primary btn-sm" @onclick='() => Navigation.NavigateTo("/characters/create")'>
+                                    Create Your First Character
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var character in characters.Take(5))
+                                {
+                                    <div class="list-group-item list-group-item-action"
+                                         style="cursor: pointer;"
+                                         @onclick='() => Navigation.NavigateTo($"/characters/{character.CharacterId}")'>
+                                        <div class="d-flex w-100 justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">@character.Name</h6>
+                                                <p class="mb-0 small text-muted">
+                                                    @character.Race @string.Join(" / ", character.Classes.Select(c => $"{c.Name} {c.Level}"))
+                                                </p>
+                                            </div>
+                                            <span class="badge bg-primary">Level @character.TotalLevel</span>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="bi bi-map"></i> @character.CampaignName
+                                        </small>
+                                    </div>
+                                }
+                                @if (characters.Count > 5)
+                                {
+                                    <div class="list-group-item text-center">
+                                        <small class="text-muted">+@(characters.Count - 5) more characters</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar & Events Section -->
+            <div class="col-lg-6">
+                <div class="card">
+                   <!-- <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-calendar-event"></i> Calendar & Events
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="PreviousMonth">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="NextMonth">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                            <button class="btn btn-sm btn-primary" @onclick="ShowAddEventModal">
+                                Add Event
+                            </button>
+                        </div>
+                    </div>-->
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-calendar-event"></i> Calendar & Events
+                        </h5>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="#" @onclick="ExportUpcomingEvents" @onclick:preventDefault>
+                                        <i class="bi bi-calendar-plus"></i> Upcoming Events
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="#" @onclick="ExportAllEvents" @onclick:preventDefault>
+                                        <i class="bi bi-calendar-check"></i> All Events
+                                    </a>
+                                </li>
+                            </ul>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousMonth">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="NextMonth">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                            <button class="btn btn-sm btn-primary" @onclick="ShowAddEventModal">
+                                <i class="bi bi-plus-circle"></i> Add Event
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="text-center mb-3">@currentDate.ToString("MMMM yyyy")</h6>
+
+                        <!-- Calendar Grid -->
+                        <div class="calendar-grid mb-3">
+                            <!-- Day Headers -->
+                            <div class="calendar-day-header">Sun</div>
+                            <div class="calendar-day-header">Mon</div>
+                            <div class="calendar-day-header">Tue</div>
+                            <div class="calendar-day-header">Wed</div>
+                            <div class="calendar-day-header">Thu</div>
+                            <div class="calendar-day-header">Fri</div>
+                            <div class="calendar-day-header">Sat</div>
+
+                            <!-- Calendar Days -->
+                            @foreach (var day in GetCalendarDays())
+                            {
+                                <div class="calendar-day @GetDayClass(day)" @onclick="() => SelectDay(day)">
+                                    <div class="day-number">@(day.HasValue? day.Value.Day.ToString() : "")</div>
+                                    @if (day.HasValue && HasEvent(day.Value))
+                                    {
+                                        <div class="event-indicator"></div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Events List for Selected Date -->
+                        @if (selectedDate.HasValue)
+                        {
+                            var dayEvents = GetEventsForDay(selectedDate.Value);
+                            <div class="mt-3">
+                                <h6 class="border-top pt-3">Events for @selectedDate.Value.ToString("MMMM dd, yyyy")</h6>
+                                @if (dayEvents.Any())
+                                {
+                                    <div class="list-group list-group-flush">
+                                        @foreach (var evt in dayEvents)
+                                        {
+                                            <div class="list-group-item">
+                                                <div class="d-flex w-100 justify-content-between align-items-start">
+                                                    <div>
+                                                        <h6 class="mb-1">@evt.Title</h6>
+                                                        @if (!string.IsNullOrEmpty(evt.Description))
+                                                        {
+                                                            <p class="mb-1 small">@evt.Description</p>
+                                                        }
+                                                        @if (evt.StartTime.HasValue)
+                                                        {
+                                                            <small class="text-muted">
+                                                                <i class="bi bi-clock"></i>
+                                                                @evt.StartTime.Value.ToString(@"hh\:mm")
+                                                                @if (evt.EndTime.HasValue)
+                                                                {
+                                                                    <text> - @evt.EndTime.Value.ToString(@"hh\:mm")</text>
+                                                                }
+                                                            </small>
+                                                        }
+                                                        @if (!string.IsNullOrEmpty(evt.CampaignName))
+                                                        {
+                                                            <br />
+                                                            <small class="text-muted">
+                                                                <i class="bi bi-map"></i> @evt.CampaignName
+                                                            </small>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-muted small">No events scheduled for this day.</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div>Upcoming Events:</div>
+                @{
+                    var upcomingEvents = events
+                    .Where(e => e.EventDate >= DateTime.Today)
+                    .OrderBy(e => e.EventDate)
+                    .ThenBy(e => e.StartTime)
+                    .Take(3)
+                    .ToList();
+                }
+                @*if(events != null && events.Count > 0)*@
+                @if(upcomingEvents.Any())
+                {
+                    @foreach(var myEvent in upcomingEvents)
+                    {
+                        <div class="card mb-3 border-start border-4 @GetEventBorderColor(myEvent)">
+                            <div class="card-body">
+                                <h6 class="d-flex justify-content-between align-items-start mb-2"><strong>@myEvent.EventDate.ToString("MM/dd/yyyy")</strong></h6>
+                        <br/>
+                        <div class="mb-0">@myEvent.Title</div>
+                        <small class="text-muted">
+                        @if(myEvent.CampaignId != null && myEvent.CampaignName != null)
+                        {
+                            <span class="badge bg-primary text-muted"><i class ="bi bi-map"></i>@myEvent.CampaignName</span>
+                            }
+                        </small>
+                            </div>
+                            @if (myEvent.EventDate.Date == DateTime.Today)
+                            {
+                                <span class="badge bg-warning text-dark">Today</span>
+                            }
+                            else if (myEvent.EventDate.Date == DateTime.Today.AddDays(1))
+                            {
+                                <span class="badge bg-info">Tomorrow</span>
+                            }
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    @onclick="() => ExportSingleEvent(myEvent.PlayerEventId, myEvent.Title, myEvent.EventDate)"
+                                    title="Export to calendar">
+                                <i class="bi bi-download"></i>
+                            </button>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-calendar-x" style="font-size: 2rem;"></i>
+                        <p class="mb-0 mt-2">No upcoming events scheduled.</p>
+                    </div>
+                }
+            </div>
+            <!-- Dice Roll History -->
+            <div class="col-12 col-lg-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-dice-5"></i> Roll History
+                        </h5>
+                        <span class="badge bg-secondary">Live</span>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (rollHistory.Count == 0)
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-dice-5" style="font-size: 3rem;"></i>
+                                <p class="mt-2">No rolls yet — press a dice button on your Stream Deck!</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var (roll, index) in rollHistory.Select((r, i) => (r, i)))
+                                {
+                                    <div class="list-group-item @(index == 0 ? "roll-latest" : "")">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <span class="fw-bold @GetRollTypeColor(roll.RollType)">
+                                                    @roll.RollType
+                                                </span>
+                                                <span class="text-muted ms-2 small">@roll.DiceNotation</span>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="@GetRollResultClass(roll) fs-5 fw-bold">
+                                                    @roll.FinalTotal
+                                                </span>
+                                                @if (roll.Modifier != 0)
+                                                {
+                                                    <span class="text-muted small ms-1">
+                                                        (@(roll.Modifier > 0 ? "+" : "")@roll.Modifier)
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                        @if (IsCrit(roll))
+                                        {
+                                            <span class="badge bg-success">Natural 20!</span>
+                                        }
+                                        else if (IsFumble(roll))
+                                        {
+                                            <span class="badge bg-danger">Natural 1</span>
+                                        }
+                                        <div class="text-muted" style="font-size: 0.7rem;">
+                                            @roll.Timestamp.ToLocalTime().ToString("h:mm:ss tt")
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shared Resources Section (Placeholder) -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-book"></i> Shared Resources
+                        </h5>
+                        <button class="btn btn-sm btn-outline-secondary" disabled>
+                            Coming Soon
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-book" style="font-size: 3rem;"></i>
+                            <p class="mt-2">Shared resources feature coming soon!</p>
+                            <small>This will include rulebooks, house rules, maps, and other shared campaign materials.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats Section -->
+        <div class="row g-4 mt-2">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h2 class="mb-0">@campaigns.Count</h2>
+                        <p class="mb-0">Active Campaigns</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h2 class="mb-0">@characters.Count</h2>
+                        <p class="mb-0">Characters</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h2 class="mb-0">@totalLevel</h2>
+                        <p class="mb-0">Combined Levels</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center">
+                        <h2 class="mb-0">@events.Count</h2>
+                        <p class="mb-0">Upcoming Events</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+
+    .calendar-day-header {
+        text-align: center;
+        font-weight: bold;
+        padding: 8px;
+        background-color: #f8f9fa;
+        font-size: 0.875rem;
+    }
+
+    .calendar-day {
+        aspect-ratio: 1;
+        border: 1px solid #dee2e6;
+        padding: 4px;
+        cursor: pointer;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        transition: background-color 0.2s;
+        min-height: 60px;
+    }
+
+        .calendar-day:hover {
+            background-color: #f8f9fa;
+        }
+
+        .calendar-day.today {
+            background-color: #e7f3ff;
+            border-color: #0d6efd;
+            font-weight: bold;
+        }
+
+        .calendar-day.selected {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        .calendar-day.other-month {
+            background-color: #f8f9fa;
+            color: #adb5bd;
+        }
+
+        .calendar-day.has-event {
+            border-color: #ffc107;
+            border-width: 2px;
+        }
+
+    .day-number {
+        font-size: 0.875rem;
+        margin-bottom: 2px;
+    }
+
+    .event-indicator {
+        width: 6px;
+        height: 6px;
+        background-color: #ffc107;
+        border-radius: 50%;
+        position: absolute;
+        bottom: 4px;
+    }
+
+    .calendar-day.selected .event-indicator {
+        background-color: white;
+    }
+
+    .roll-latest {
+        background-color: #fff8e1;
+        border-left: 4px solid #ffc107 !important;
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+<!--<script>
+    window.downloadFileFromStream = async (fileName, contentStreamReference) => {
+    const arrayBuffer = await contentStreamReference.arrayBuffer();
+    const blob = new Blob([arrayBuffer]);
+    const url = URL.createObjectURL(blob);
+    const anchorElement = document.createElement('a');
+    anchorElement.href = url;
+    anchorElement.download = fileName ?? '';
+    anchorElement.click();
+    anchorElement.remove();
+    URL.revokeObjectURL(url);
+</script>-->
+@code {
+    private List<CampaignDto> campaigns = new();
+    private List<CharacterDto> characters = new();
+    private List<PlayerEventDto> events = new();
+    private bool isLoading = true;
+    private int totalLevel = 0;
+    private DateTime currentDate = DateTime.Today;
+    private DateTime? selectedDate = null;
+    private IJSObjectReference? jsModule;
+    private HubConnection? rollHubConnection;
+    private List<DiceRoll> rollHistory = new();
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        await ConnectToRollHub();
+        try
+        {
+            campaigns = await CampaignService.GetCampaignsAsync();
+            characters = await CharacterService.GetCharactersAsync();
+            totalLevel = characters.Sum(c => c.TotalLevel);
+            await LoadEvents();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(firstRender)
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/Home.js");
+        }
+    }
+
+    private async Task LoadEvents()
+    {
+        events = await EventService.GetEventsByMonthAsync(currentDate.Year, currentDate.Month);
+    }
+
+    private void PreviousMonth()
+    {
+        currentDate = currentDate.AddMonths(-1);
+        selectedDate = null;
+        _ = LoadEvents();
+    }
+
+    private void NextMonth()
+    {
+        currentDate = currentDate.AddMonths(1);
+        selectedDate = null;
+        _ = LoadEvents();
+    }
+
+    private void SelectDay(DateTime? day)
+    {
+        if (day.HasValue)
+        {
+            selectedDate = day.Value;
+        }
+    }
+
+    private List<DateTime?> GetCalendarDays()
+    {
+        var firstDayOfMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+        var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
+        var startDayOfWeek = (int)firstDayOfMonth.DayOfWeek;
+
+        var days = new List<DateTime?>();
+
+        // Add empty days for previous month
+        for (int i = 0; i < startDayOfWeek; i++)
+        {
+            days.Add(firstDayOfMonth.AddDays(-(startDayOfWeek - i)));
+        }
+
+        // Add days of current month
+        for (int day = 1; day <= lastDayOfMonth.Day; day++)
+        {
+            days.Add(new DateTime(currentDate.Year, currentDate.Month, day));
+        }
+
+        // Add empty days for next month to complete the grid
+        while (days.Count % 7 != 0)
+        {
+            days.Add(lastDayOfMonth.AddDays(days.Count - startDayOfWeek - lastDayOfMonth.Day + 1));
+        }
+
+        return days;
+    }
+
+    private string GetDayClass(DateTime? day)
+    {
+        if (!day.HasValue) return "";
+
+        var classes = new List<string>();
+
+        if (day.Value.Month != currentDate.Month)
+            classes.Add("other-month");
+
+        if (day.Value.Date == DateTime.Today)
+            classes.Add("today");
+
+        if (selectedDate.HasValue && day.Value.Date == selectedDate.Value.Date)
+            classes.Add("selected");
+
+        if (HasEvent(day.Value))
+            classes.Add("has-event");
+
+        return string.Join(" ", classes);
+    }
+
+    private bool HasEvent(DateTime day)
+    {
+        return events.Any(e => e.EventDate.Date == day.Date);
+    }
+
+    private List<PlayerEventDto> GetEventsForDay(DateTime day)
+    {
+        return events.Where(e => e.EventDate.Date == day.Date).OrderBy(e => e.StartTime).ToList();
+    }
+
+    private void ShowAddEventModal()
+    {
+        // TODO: Implement modal for adding events
+        // For now, just navigate to an events page
+        Navigation.NavigateTo("/events/create");
+    }
+
+    private string GetEventBorderColor(PlayerEventDto myEvent)
+    {
+        if (myEvent.EventDate.Date == DateTime.Today)
+            return "border-warning";
+        else if (myEvent.EventDate.Date <= DateTime.Today.AddDays(3))
+            return "border-info";
+        else
+            return "border-primary";
+    }
+
+    private async Task ExportSingleEvent(int eventId, string eventTitle, DateTime eventDate)
+    {
+        try
+        {
+            var fileBytes = await EventService.ExportEventAsync(eventId);
+            if (fileBytes != null)
+            {
+                var fileName = $"{SanitizeFileName(eventTitle)}_{eventDate:yyyy-MM-dd}.ics";
+                var fileStream = new MemoryStream(fileBytes);
+                using var streamRef = new DotNetStreamReference(stream: fileStream);
+                await jsModule.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error - could show a toast notification
+            Console.WriteLine($"Error exporting event: {ex.Message}");
+        }
+    }
+
+    private async Task ExportAllEvents()
+    {
+        try
+        {
+            var fileBytes = await EventService.ExportAllEventsAsync();
+            if (fileBytes != null)
+            {
+                var fileName = $"DnD_Events_{DateTime.Now:yyyy-MM-dd}.ics";
+                var fileStream = new MemoryStream(fileBytes);
+                using var streamRef = new DotNetStreamReference(stream: fileStream);
+                await jsModule.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error exporting all events: {ex.Message}");
+        }
+    }
+
+    private async Task ExportUpcomingEvents()
+    {
+        try
+        {
+            var fileBytes = await EventService.ExportUpcomingEventsAsync();
+            if (fileBytes != null)
+            {
+                var fileName = $"DnD_Upcoming_Events_{DateTime.Now:yyyy-MM-dd}.ics";
+                var fileStream = new MemoryStream(fileBytes);
+                using var streamRef = new DotNetStreamReference(stream: fileStream);
+                await jsModule.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error exporting upcoming events: {ex.Message}");
+        }
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+        return sanitized.Length > 50 ? sanitized.Substring(0, 50) : sanitized;
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (rollHubConnection is not null)
+            await rollHubConnection.DisposeAsync();
+
+        if (jsModule is not null)
+        {
+            await jsModule.DisposeAsync();
+        }
+    }
+    private async Task ConnectToRollHub()
+    {
+        rollHubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/rollhub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        rollHubConnection.On<DiceRoll>("ReceiveRoll", (roll) =>
+        {
+            rollHistory.Insert(0, roll);
+            if (rollHistory.Count > 10)
+                rollHistory.RemoveAt(rollHistory.Count - 1);
+            InvokeAsync(StateHasChanged);
+        });
+
+        await rollHubConnection.StartAsync();
+    }
+
+    private string GetRollTypeColor(string rollType) => rollType switch
+    {
+        "Skill Check" => "text-primary",
+        "Saving Throw" => "text-success",
+        "Attack Roll" => "text-danger",
+        "Initiative" => "text-warning",
+        "Damage Roll" => "text-info",
+        _ => "text-secondary"
+    };
+
+    private string GetRollResultClass(DiceRoll roll)
+    {
+        if (IsCrit(roll)) return "text-success";
+        if (IsFumble(roll)) return "text-danger";
+        return "";
+    }
+
+    private bool IsCrit(DiceRoll roll) =>
+        roll.Results?.Count == 1 && roll.Results[0] == 20;
+
+    private bool IsFumble(DiceRoll roll) =>
+        roll.Results?.Count == 1 && roll.Results[0] == 1;
+}

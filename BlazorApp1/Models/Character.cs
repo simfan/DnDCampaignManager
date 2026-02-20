@@ -31,5 +31,13 @@ namespace BlazorApp1.Models
         public DateTime CreatedDate { get; set; } = DateTime.Now;
         public DateTime LastUpdatedDate { get; set; }
         public int TotalLevel => Classes.Sum(c => c.Level);
+        public string? SkillsJson { get; set; }
+    }
+
+    public enum SkillProficiency
+    {
+        None = 0,
+        Proficient = 1,
+        Expertiese = 2
     }
 }

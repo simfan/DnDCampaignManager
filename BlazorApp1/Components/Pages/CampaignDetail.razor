@@ -6,6 +6,8 @@
 @using BlazorApp1.Components.Shared
 @using BlazorStrap
 @using BlazorStrap.V5
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject CampaignService CampaignService
 @inject CharacterService CharacterService
 @inject NavigationManager Navigation
@@ -57,6 +59,13 @@
                    @onclick='() => activeTab = "members"'
                    style="cursor: pointer;">
                     Members (@campaign.Members.Count)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "resources" ? "active" : "")"
+                   @onclick='() => activeTab = "resources"'
+                   style="cursor: pointer;">
+                    Resources
                 </a>
             </li>
         </ul>
@@ -114,6 +123,39 @@
                 }
             </div>
         }
+        else
+        if (activeTab == "resources")
+        {
+            <CampaignResources 
+        CampaignId="@CampaignId" 
+        IsDM="@isDM"
+        CurrentUserId="@currentUserId"
+        CampaignMembers="@campaign.Members"
+        CampaignCharacters="@campaign.Characters" />
+    }
+    
+}
+</div>
+<div>@if(campaign?.Journal != null)
+    {
+        @if(!createJournal)
+        {
+            <JournalFull Journal="@campaign.Journal"/>
+        }
+    }
+    else
+    {
+        <div>No Journal Found.
+            @if(!createJournal)
+            {
+                <BSButton Color="BSColor.Primary" OnClick="ShowAddJournalSection">Create One</BSButton>
+            }
+            else if(campaign != null)
+            {
+                <NewJournal OwnerId="@campaign.CampaignId.ToString()" JournalTypeId="3" CreatedJournal = "UpdateJournal"/>
+            }
+        </div>
+
     }
 </div>
 <div class ="col-md-4">
@@ -127,10 +169,22 @@
     private CampaignDetailDto? campaign;
     private bool isLoading = true;
     private string activeTab = "characters";
+    private string currentUserId = string.Empty;
+    private bool isDM = false;
+
+    private bool createJournal = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadCampaign();
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+
+        if(campaign != null)
+        {
+            isDM = campaign.Members.Any(m => m.UserId == currentUserId && m.Role == "DM");
+        }
     }
 
     private async Task LoadCampaign()
@@ -156,10 +210,23 @@
         Navigation.NavigateTo($"/campaigns/{CampaignId}/characters/create");
     }
 
+    private void ShowAddJournalSection()
+    {
+        Console.WriteLine("Displaying Create Journal Section");
+        createJournal = true;
+        //campaign?.Journal = new();
+        StateHasChanged();
+    }
+
     private void ViewCharacter(int characterId)
     {
         Navigation.NavigateTo($"/characters/{characterId}");
     }
 
-    
+    private void UpdateJournal(JournalDto journal)
+    {
+
+        campaign?.Journal = journal.ToDetalDto();
+        StateHasChanged();
+    }
 }

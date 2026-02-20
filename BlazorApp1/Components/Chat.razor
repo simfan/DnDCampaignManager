@@ -1,0 +1,578 @@
+﻿@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject CampaignService CampaignService
+@inject ChatService ChatService
+
+@implements IAsyncDisposable
+
+<div class="chat-container">
+    @if (!isOpen)
+    {
+        <!-- Chat Bubble -->
+        <button class="chat-bubble" @onclick="OpenChat">
+            <span class="chat-icon">💬</span>
+            @if (totalUnreadCount > 0)
+            {
+                <span class="unread-badge">@totalUnreadCount</span>
+            }
+        </button>
+    }
+    else
+    {
+        <!-- Chat Window -->
+        <div class="chat-window">
+            <!-- Header -->
+            <div class="chat-header">
+                <div class="chat-header-title">
+                    <span class="chat-icon">💬</span>
+                    <h3>@GetCurrentViewTitle()</h3>
+                </div>
+                <div class="chat-header-actions">
+                    @if (currentView != ChatView.List)
+                    {
+                        <button class="btn-icon" @onclick="BackToList">←</button>
+                    }
+                    <button class="btn-icon" @onclick="CloseChat">✕</button>
+                </div>
+            </div>
+
+            <!-- Content -->
+            @if (currentView == ChatView.List)
+            {
+                <div class="chat-content">
+                    <div class="chat-rooms-header">
+                        <button class="btn-primary" @onclick="ShowNewChatView">
+                            <span>➕</span> New Chat
+                        </button>
+                    </div>
+                    <div class="chat-rooms-list">
+                        @if (chatRooms == null)
+                        {
+                            <div class="loading">Loading chats...</div>
+                        }
+                        else if (!chatRooms.Any())
+                        {
+                            <div class="empty-state">
+                                <p>No chats yet</p>
+                                <p class="text-sm">Create a new chat to get started</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var room in chatRooms)
+                            {
+                                <button class="chat-room-item" @onclick="() => OpenChatRoom(room)">
+                                    <div class="chat-room-icon">@GetRoomIcon(room.Type)</div>
+                                    <div class="chat-room-details">
+                                        <div class="chat-room-header">
+                                            <h4>@room.Name</h4>
+                                            @if (room.UnreadCount > 0)
+                                            {
+                                                <span class="unread-count">@room.UnreadCount</span>
+                                            }
+                                        </div>
+                                        <p class="chat-room-preview">@(room.LastMessage ?? "No messages yet")</p>
+                                        @if (room.LastMessageAt.HasValue)
+                                        {
+                                            <p class="chat-room-time">@FormatTime(room.LastMessageAt.Value)</p>
+                                        }
+                                    </div>
+                                </button>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+            else if (currentView == ChatView.Chat && selectedRoom != null)
+            {
+                <div class="chat-content">
+                    <div class="messages-container" @ref="messagesContainer">
+                        @if (messages == null)
+                        {
+                            <div class="loading">Loading messages...</div>
+                        }
+                        else if (!messages.Any())
+                        {
+                            <div class="empty-state">
+                                <p>No messages yet</p>
+                                <p class="text-sm">Start the conversation!</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var message in messages)
+                            {
+                                <div class="message @(message.IsOwnMessage ? "message-own" : "message-other")">
+                                    @if (!message.IsOwnMessage)
+                                    {
+                                        <div class="message-sender">@message.SenderName</div>
+                                    }
+                                    <div class="message-bubble">
+                                        <p>@message.Content</p>
+                                    </div>
+                                    <div class="message-time">
+                                        @message.SentAt.ToLocalTime().ToString("h:mm tt")
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                    <div class="message-input-container">
+                        <input type="text"
+                               class="message-input"
+                               placeholder="Type a message..."
+                               @bind="newMessage"
+                               @onkeypress="HandleKeyPress" />
+                        <button class="btn-send" @onclick="SendMessage" disabled="@string.IsNullOrWhiteSpace(newMessage)">
+                            <span>➤</span>
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (currentView == ChatView.NewChat)
+            {
+                <div class="chat-content">
+                    <div class="new-chat-form">
+                        <div class="form-group">
+                            <label>Chat Type</label>
+                            <div class="chat-type-buttons">
+                                <button class="chat-type-btn @(newChatType == "Direct" ? "active" : "")"
+                                        @onclick='() => newChatType = "Direct"'>
+                                    <span>👤</span>
+                                    <span>Direct</span>
+                                </button>
+                                <button class="chat-type-btn @(newChatType == "Group" ? "active" : "")"
+                                        @onclick='() => newChatType = "Group"'>
+                                    <span>👥</span>
+                                    <span>Group</span>
+                                </button>
+                                <button class="chat-type-btn @(newChatType == "CampaignWide" ? "active" : "")"
+                                        @onclick='() => newChatType = "CampaignWide"'>
+                                    <span>🏛️</span>
+                                    <span>Campaign</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (newChatType == "Group")
+                        {
+                            <div class="form-group">
+                                <label>Group Name</label>
+                                <input type="text" class="form-input" @bind="newChatName" placeholder="Enter group name..." />
+                            </div>
+                        }
+
+                        @if (newChatType == "CampaignWide")
+                        {
+                            <div class="form-group">
+                                <label>Select Campaign</label>
+                                <select class="form-input" @bind="selectedCampaignId">
+                                    <option value="">-- Select Campaign --</option>
+                                    @foreach (var campaign in availableCampaigns)
+                                    {
+                                        <option value="@campaign.CampaignId">@campaign.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
+                        @if (newChatType != "CampaignWide")
+                        {
+                            <div class="form-group">
+                                <label>Select @(newChatType == "Direct" ? "Person" : "People")</label>
+                                <input type="text" class="form-input" @bind="userSearchQuery" placeholder="Search users..." />
+                                <div class="user-list">
+                                    @foreach (var user in GetFilteredUsers())
+                                    {
+                                        <button class="user-item @(selectedUserIds.Contains(user.UserId) ? "selected" : "")"
+                                                @onclick="() => ToggleUserSelection(user.UserId)">
+                                            <span>@user.Username</span>
+                                            <span class="user-role">@user.Role</span>
+                                            @if (selectedUserIds.Contains(user.UserId))
+                                            {
+                                                <span class="checkmark">✓</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <button class="btn-primary btn-full" @onclick="CreateChatRoom">
+                            Create Chat
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private enum ChatView { List, Chat, NewChat }
+
+    private bool isOpen = false;
+    private ChatView currentView = ChatView.List;
+    private List<ChatRoomDto>? chatRooms;
+    private List<ChatMessageDto>? messages;
+    private ChatRoomDto? selectedRoom;
+    private string newMessage = "";
+    private int totalUnreadCount = 0;
+    private ElementReference messagesContainer;
+    private HubConnection? hubConnection;
+
+    // New chat form
+    private string newChatType = "Direct";
+    private string newChatName = "";
+    private int? selectedCampaignId;
+    private List<string> selectedUserIds = new();
+    private string userSearchQuery = "";
+    private List<CampaignDto> availableCampaigns = new();
+    private List<dynamic> availableUsers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine("Chat Component Initialized");
+        await InitializeSignalR();
+    }
+
+    /*private async Task InitializeSignalR()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/chathub"))
+            .Build();
+
+    hubConnection.On<string, string, string>("ReceiveMessage", async (chatRoomId, message, senderName) =>
+        {
+            if (selectedRoom != null && selectedRoom.ChatRoomId.ToString() == chatRoomId)
+            {
+                await LoadMessages(selectedRoom.ChatRoomId);
+    await InvokeAsync(StateHasChanged);
+            }
+            await LoadChatRooms();
+    });
+
+        //await hubConnection.StartAsync();
+    }*/
+
+    private async Task InitializeSignalR()
+    {
+        try
+        {
+    hubConnection = new HubConnectionBuilder()
+        .WithUrl(Navigation.ToAbsoluteUri("/chathub"), options =>
+        {
+            options.Cookies.Add(new System.Net.Cookie(".AspNetCore.Identity.Application", "", "/", Navigation.ToAbsoluteUri("/").Host));
+        })
+        .WithAutomaticReconnect()
+        .Build();
+
+    hubConnection.On<string, string, string>("ReceiveMessage", async (chatRoomId, message, senderName) =>
+    {
+        if (selectedRoom != null && selectedRoom.ChatRoomId.ToString() == chatRoomId)
+        {
+            await LoadMessages(selectedRoom.ChatRoomId);
+            await InvokeAsync(StateHasChanged);
+        }
+        await LoadChatRooms();
+    });
+
+    await hubConnection.StartAsync();
+    Console.WriteLine("SignalR Connected!");
+        }
+        catch (Exception ex)
+        {
+    Console.WriteLine($"SignalR Connection Error: {ex.Message}");
+    // Don't throw - let the app work without real-time updates
+        }
+    }
+
+    private async Task OpenChat()
+    {
+        Console.WriteLine("Chat Bubble Clicked");
+        Console.WriteLine($"isOpen before: {isOpen}");
+        isOpen = true;
+        Console.WriteLine($"isOpen after: {isOpen}");
+        await LoadChatRooms();
+        StateHasChanged();
+            Console.WriteLine("Chat Opened");
+    }
+
+    private void CloseChat()
+    {
+        isOpen = false;
+        currentView = ChatView.List;
+    }
+
+    private void BackToList()
+    {
+        currentView = ChatView.List;
+        selectedRoom = null;
+        messages = null;
+        newMessage = "";
+        selectedUserIds.Clear();
+        newChatName = "";
+    }
+
+    private async Task LoadChatRooms()
+    {
+        try
+        {
+    //chatRooms = await Http.GetFromJsonAsync<List<ChatRoomDto>>("api/Chat/rooms");
+    chatRooms = await ChatService.GetChatRoomsAsync();
+    totalUnreadCount = chatRooms?.Sum(r => r.UnreadCount) ?? 0;
+    StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+    Console.WriteLine($"Error loading chat rooms: {ex.Message}");
+        }
+    }
+
+    private async Task OpenChatRoom(ChatRoomDto room)
+    {
+        selectedRoom = room;
+        currentView = ChatView.Chat;
+        await LoadMessages(room.ChatRoomId);
+        await MarkAsRead(room.ChatRoomId);
+
+        if (hubConnection?.State == HubConnectionState.Connected)
+        {
+    await hubConnection.SendAsync("JoinChatRoom", room.ChatRoomId.ToString());
+        }
+    }
+
+    private async Task LoadMessages(int chatRoomId)
+    {
+        try
+        {
+    //messages = await Http.GetFromJsonAsync<List<ChatMessageDto>>($"api/Chat/rooms/{chatRoomId}/messages");
+    messages = await ChatService.GetChatMessagesAsync(chatRoomId);
+    StateHasChanged();
+    await ScrollToBottom();
+        }
+        catch (Exception ex)
+        {
+    Console.WriteLine($"Error loading messages: {ex.Message}");
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage) || selectedRoom == null)
+    return;
+
+        try
+        {
+    var dto = new SendMessageDto
+            {
+                ChatRoomId = selectedRoom.ChatRoomId,
+                Content = newMessage.Trim()
+            };
+
+    //var response = await Http.PostAsJsonAsync("api/Chat/messages", dto);
+    var response = await ChatService.SendMessageAsync(dto);
+    if (response.IsSuccessStatusCode)
+    {
+        newMessage = "";
+
+        if (hubConnection?.State == HubConnectionState.Connected)
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userName = authState.User.Identity?.Name ?? "User";
+            await hubConnection.SendAsync("SendMessageToRoom", selectedRoom.ChatRoomId.ToString(), dto.Content, userName);
+        }
+
+        await LoadMessages(selectedRoom.ChatRoomId);
+    }
+        }
+        catch (Exception ex)
+        {
+    Console.WriteLine($"Error sending message: {ex.Message}");
+        }
+    }
+
+    private async Task MarkAsRead(int chatRoomId)
+    {
+        try
+        {
+    //await Http.PostAsync($"api/Chat/rooms/{chatRoomId}/mark-read", null);
+    await ChatService.MarkAsReadAsync(chatRoomId);
+    await LoadChatRooms();
+        }
+        catch (Exception ex)
+        {
+    Console.WriteLine($"Error marking as read: {ex.Message}");
+        }
+    }
+
+    private async Task ShowNewChatView()
+    {
+        currentView = ChatView.NewChat;
+        // Load available campaigns
+        try
+        {
+    //availableCampaigns = await Http.GetFromJsonAsync<List<CampaignDto>>("api/Campaigns") ?? new();
+    availableCampaigns = await CampaignService.GetCampaignsAsync() ?? new();
+    Console.WriteLine($"Loaded {availableCampaigns.Count} campaigns");
+
+        }
+        catch(Exception ex)
+            {
+    Console.WriteLine($"Error loading campaigns: {ex.Message}");
+    availableCampaigns = new();
+            }
+    }
+
+    private async Task CreateChatRoom()
+    {
+        try
+        {
+    string name = newChatName;
+
+    if (newChatType == "Direct" && selectedUserIds.Count != 1)
+    {
+        // Show error
+        return;
+    }
+
+    if (newChatType == "Group" && string.IsNullOrWhiteSpace(name))
+    {
+        // Show error
+        return;
+    }
+
+    if (newChatType == "CampaignWide" && !selectedCampaignId.HasValue)
+    {
+        // Show error
+        return;
+    }
+
+    if (newChatType == "Direct")
+    {
+        var selectedUser = availableUsers.First(u => u.UserId == selectedUserIds[0]);
+        name = selectedUser.Username;
+    }
+    else if (newChatType == "CampaignWide")
+    {
+        var campaign = availableCampaigns.First(c => c.CampaignId == selectedCampaignId.Value);
+        name = $"{campaign.Name} - Campaign Chat";
+
+        // Load campaign members
+        //var members = await Http.GetFromJsonAsync<List<dynamic>>($"api/Chat/campaigns/{selectedCampaignId.Value}/members");
+        var members = await ChatService.GetCampaignMembersAsync(selectedCampaignId.Value);
+        selectedUserIds = members?.Select(m => (string)m.GetProperty("userId").GetString()).ToList() ?? new();
+    }
+
+    var dto = new CreateChatRoomDto
+            {
+                Name = name,
+                Type = newChatType,
+                CampaignId = selectedCampaignId,
+                MemberUserIds = selectedUserIds
+            };
+
+    //var response = await Http.PostAsJsonAsync("api/Chat/rooms", dto);
+    //var response = await ChatService.CreateChatRoomAsync(dto);
+    //if (response.IsSuccessStatusCode)
+    //{
+            var newRoom = await ChatService.CreateChatRoomAsync(dto);
+            await LoadChatRooms();
+            if (newRoom != null)
+            {
+                await OpenChatRoom(newRoom);
+            }
+    //}
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating chat room: {ex.Message}");
+        }
+    }
+
+    private void ToggleUserSelection(string userId)
+    {
+        if (newChatType == "Direct")
+        {
+            selectedUserIds.Clear();
+            selectedUserIds.Add(userId);
+        }
+        else
+        {
+            if (selectedUserIds.Contains(userId))
+                selectedUserIds.Remove(userId);
+            else
+                selectedUserIds.Add(userId);
+        }
+    }
+
+    private List<dynamic> GetFilteredUsers()
+    {
+        if (string.IsNullOrWhiteSpace(userSearchQuery))
+            return availableUsers;
+
+        return availableUsers
+            .Where(u => ((string)u.Username).Contains(userSearchQuery, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private string GetRoomIcon(string type) => type switch
+    {
+        "CampaignWide" => "🏛️",
+        "Group" => "👥",
+        "Direct" => "👤",
+        _ => "💬"
+    };
+
+    private string GetCurrentViewTitle() => currentView switch
+    {
+        ChatView.List => "Messages",
+        ChatView.Chat => selectedRoom?.Name ?? "Chat",
+        ChatView.NewChat => "New Chat",
+        _ => "Chat"
+    };
+
+    private string FormatTime(DateTime time)
+    {
+        var local = time.ToLocalTime();
+        var now = DateTime.Now;
+
+        if (local.Date == now.Date)
+            return local.ToString("h:mm tt");
+        else if (local.Date == now.AddDays(-1).Date)
+            return "Yesterday";
+        else if (local.Date > now.AddDays(-7).Date)
+            return local.ToString("dddd");
+        else
+            return local.ToString("MM/dd/yy");
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await Task.Delay(100);
+        // In a real implementation, you'd use JS interop to scroll
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

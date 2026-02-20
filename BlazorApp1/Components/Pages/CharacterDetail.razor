@@ -41,7 +41,8 @@
                     </p>
                     <p class="text-muted">
                         <i class="bi bi-person"></i> Player: @character.PlayerName |
-                        <i class="bi bi-map"></i> Campaign: @character.CampaignName
+                        <i class="bi bi-map"></i> Campaign: @character.CampaignName |
+                        <strong>Proficiency Bonus: +@character.GetProficiencyBonus()</strong>
                     </p>
                 </div>
                 <div>
@@ -51,7 +52,7 @@
         </div>
 
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="card mb-3">
                     <div class="card-header">
                         <h5>Ability Scores</h5>
@@ -59,79 +60,66 @@
                     <div class="card-body">
                         <div class="row text-center">
                             <div class="col-4 mb-3">
-                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Strength))">
+                                <div class="border rounded p-2 clickable" @onclick="@(() => RollAbilityCheck(character.Strength))">
                                     <div class="fw-bold">STR</div>
                                     <div class="display-6">@character.Strength</div>
                                     <div class="text-muted small">@GetModifier(character.Strength)</div>
                                 </div>
                             </div>
                             <div class="col-4 mb-3">
-                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Dexterity))">
+                                <div class="border rounded p-2 clickable" @onclick="@(() => RollAbilityCheck(character.Dexterity))">
                                     <div class="fw-bold">DEX</div>
                                     <div class="display-6">@character.Dexterity</div>
                                     <div class="text-muted small">@GetModifier(character.Dexterity)</div>
                                 </div>
                             </div>
                             <div class="col-4 mb-3">
-                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Constitution))">
+                                <div class="border rounded p-2 clickable" @onclick="@(() => RollAbilityCheck(character.Constitution))">
                                     <div class="fw-bold">CON</div>
                                     <div class="display-6">@character.Constitution</div>
                                     <div class="text-muted small">@GetModifier(character.Constitution)</div>
                                 </div>
                             </div>
                             <div class="col-4 mb-3">
-                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Intelligence))">
+                                <div class="border rounded p-2 clickable" @onclick="@(() => RollAbilityCheck(character.Intelligence))">
                                     <div class="fw-bold">INT</div>
                                     <div class="display-6">@character.Intelligence</div>
                                     <div class="text-muted small">@GetModifier(character.Intelligence)</div>
                                 </div>
                             </div>
                             <div class="col-4 mb-3">
-                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Wisdom))">
+                                <div class="border rounded p-2 clickable" @onclick="@(() => RollAbilityCheck(character.Wisdom))">
                                     <div class="fw-bold">WIS</div>
                                     <div class="display-6">@character.Wisdom</div>
                                     <div class="text-muted small">@GetModifier(character.Wisdom)</div>
                                 </div>
                             </div>
                             <div class="col-4 mb-3">
-                                <div class="border rounded p-2" onclick="@(() => RollAbilityCheck(character.Charisma))">
+                                <div class="border rounded p-2 clickable" @onclick="@(() => RollAbilityCheck(character.Charisma))">
                                     <div class="fw-bold">CHA</div>
                                     <div class="display-6">@character.Charisma</div>
                                     <div class="text-muted small">@GetModifier(character.Charisma)</div>
                                 </div>
                             </div>
                         </div>
-                        
-                            @if(lastRoll != null)
-                            {
-                                <hr />
-                                <div class="row text-center">
-                                    <div class="col-4 mb-3">
-                                        <div class="border rounded p-2">
-                                            <div class="fw-bold">ROLL</div>
-                                            <div class="display-6">@lastRoll.Total</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-4 mb-3">
-                                        <div class="border rounded p-2">
-                                            <div class="fw-bold">MOD</div>
-                                            <div class="display-6">@lastRoll.Modifier</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-4 mb-3">
-                                        <div class="border rounded p-2">
-                                            <div class="fw-bold">TOTAL</div>
-                                            <div class="display-6">@lastRoll.FinalTotal</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <span>@lastRoll.Total @(lastRoll.Modifier < 0 ? " - " : " + ") @lastRoll.Modifier = @lastRoll.FinalTotal</span>
-                            }
-                            else
-                            {
-                                <span>No Roll</span> 
-                            }
-                        
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Last Roll</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        @if (lastRoll != null)
+                        {
+                            <div class="mb-2"><strong>@lastRoll.RollType</strong></div>
+                            <div class="display-4">@lastRoll.FinalTotal</div>
+                            <span class="text-muted">(@string.Join(", ", lastRoll.Results)) @(lastRoll.Modifier >= 0 ? "+" : "") @lastRoll.Modifier</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">No Roll</span>
+                        }
                     </div>
                 </div>
 
@@ -153,7 +141,52 @@
                 </div>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5>Skills</h5>
+                        <small class="text-muted">Click to roll skill check</small>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @foreach (var skill in GetSkillsForDisplay())
+                            {
+                                var abilityMod = character.GetAbilityModifier(skill.AbilityScore);
+                                var profBonus = character.GetProficiencyBonus();
+                                var totalMod = abilityMod + (skill.IsProficient ? (skill.HasExpertise ? profBonus * 2 : profBonus) : 0);
+
+                                <div class="list-group-item list-group-item-action clickable py-2" @onclick="@(() => RollSkillCheck(skill))">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            @if (skill.HasExpertise)
+                                            {
+                                                <i class="bi bi-star-fill text-warning me-2" title="Expertise"></i>
+                                            }
+                                            else if (skill.IsProficient)
+                                            {
+                                                <i class="bi bi-circle-fill text-primary me-2" title="Proficient" style="font-size: 0.6rem;"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-circle text-muted me-2" title="Not Proficient" style="font-size: 0.6rem;"></i>
+                                            }
+                                            <div>
+                                                <strong>@skill.Name</strong>
+                                                <small class="text-muted ms-1">(@skill.AbilityScore)</small>
+                                            </div>
+                                        </div>
+                                        <span class="badge @(totalMod >= 0 ? "bg-success" : "bg-danger")">
+                                            @(totalMod >= 0 ? "+" : "")@totalMod
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
                 <div class="card mb-3">
                     <div class="card-header">
                         <h5>Combat Stats</h5>
@@ -205,6 +238,9 @@
                         <button class="btn btn-primary" @onclick="EditCharacter">
                             <i class="bi bi-pencil"></i> Edit Character
                         </button>
+                        <button class="btn btn-secondary" @onclick="ToggleSkillProficiency">
+                            <i class="bi bi-clipboard-check"></i> Manage Skills
+                        </button>
                         <button class="btn btn-danger" @onclick="DeleteCharacter">
                             <i class="bi bi-trash"></i> Delete Character
                         </button>
@@ -212,8 +248,70 @@
                 </div>
             </div>
         </div>
+
+        @if (showSkillManager)
+        {
+            <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Manage Skill Proficiencies</h5>
+                            <button type="button" class="btn-close" @onclick="ToggleSkillProficiency"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted">Click on a skill to toggle proficiency. Double-click for expertise.</p>
+                            <div class="list-group">
+                                @foreach (var skill in GetSkillsForDisplay())
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>@skill.Name</strong>
+                                                <small class="text-muted ms-1">(@skill.AbilityScore)</small>
+                                            </div>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button class="btn @(skill.IsProficient == false ? "btn-secondary" : "btn-outline-secondary")"
+                                                        @onclick="@(() => SetSkillProficiency(skill, false, false))">
+                                                    None
+                                                </button>
+                                                <button class="btn @(skill.IsProficient && !skill.HasExpertise ? "btn-primary" : "btn-outline-primary")"
+                                                        @onclick="@(() => SetSkillProficiency(skill, true, false))">
+                                                    Proficient
+                                                </button>
+                                                <button class="btn @(skill.HasExpertise ? "btn-warning" : "btn-outline-warning")"
+                                                        @onclick="@(() => SetSkillProficiency(skill, true, true))">
+                                                    Expertise
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="ToggleSkillProficiency">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
+
+<style>
+    .clickable {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+        .clickable:hover {
+            background-color: #f8f9fa;
+        }
+
+    .list-group-item-action.clickable:hover {
+        background-color: #e9ecef;
+    }
+</style>
 
 @code {
     [Parameter]
@@ -222,11 +320,12 @@
     private CharacterDto? character;
     private bool isLoading = true;
     private DiceRoll? lastRoll;
+    private bool showSkillManager = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadCharacter();
-        //lastRoll.FinalTotal = 0;
+        EnsureSkillsInitialized();
     }
 
     private async Task LoadCharacter()
@@ -242,6 +341,23 @@
         }
     }
 
+    private void EnsureSkillsInitialized()
+    {
+        if (character != null && (character.Skills == null || character.Skills.Count == 0))
+        {
+            character.Skills = SkillDefinitions.GetAllSkills();
+        }
+    }
+
+    private List<Skill> GetSkillsForDisplay()
+    {
+        if (character?.Skills == null || character.Skills.Count == 0)
+        {
+            return SkillDefinitions.GetAllSkills();
+        }
+        return character.Skills.OrderBy(s => s.Name).ToList();
+    }
+
     private string GetModifier(int abilityScore)
     {
         int modifier = (abilityScore - 10) / 2;
@@ -252,10 +368,38 @@
     {
         int modifier = (abilityScore - 10) / 2;
         lastRoll = DiceService.SkillCheck(modifier);
+        lastRoll.RollType = "Ability Check";
     }
 
+    private void RollSkillCheck(Skill skill)
+    {
+        if (character == null) return;
 
-    @***********************************************@
+        int abilityMod = character.GetAbilityModifier(skill.AbilityScore);
+        int profBonus = character.GetProficiencyBonus();
+        int totalMod = abilityMod;
+
+        if (skill.IsProficient)
+        {
+            totalMod += skill.HasExpertise ? profBonus * 2 : profBonus;
+        }
+
+        lastRoll = DiceService.SkillCheck(totalMod);
+        lastRoll.RollType = $"{skill.Name} Check";
+    }
+
+    private void ToggleSkillProficiency()
+    {
+        showSkillManager = !showSkillManager;
+    }
+
+    private void SetSkillProficiency(Skill skill, bool proficient, bool expertise)
+    {
+        skill.IsProficient = proficient;
+        skill.HasExpertise = expertise;
+        StateHasChanged();
+    }
+
     private void GoBack()
     {
         if (character != null)

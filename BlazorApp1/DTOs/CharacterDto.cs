@@ -1,4 +1,5 @@
-﻿namespace BlazorApp1.DTOs
+﻿using BlazorApp1.Models;
+namespace BlazorApp1.DTOs
 {
     public class CharacterDto
     {
@@ -17,11 +18,14 @@
         public int Intelligence { get; set; }
         public int Wisdom { get; set; }
         public int Charisma { get; set; }
+        // Skill Proficiencies - 0 (not
 
         // Derived Stats
         public int ArmorClass { get; set; }
         public int MaxHitPoints { get; set; }
         public int CurrentHitPoints { get; set; }
+
+        public List<Skill> Skills { get; set; }
 
         // Foreign Keys
         public int CampaignId { get; set; }
@@ -31,6 +35,35 @@
 
         public DateTime CreatedDate { get; set; }
         public DateTime? LastModifiedDate { get; set; }
+
+        public int GetProficiencyBonus()
+        {
+            return TotalLevel switch
+            {
+                <= 4 => 2,
+                <= 8 => 3,
+                <= 12 => 4,
+                <= 16 => 5,
+                _ => 6
+            };
+        }
+
+        public int GetAbilityModifier(string abilityScore)
+        {
+            int score = abilityScore switch
+            {
+                "STR" => Strength,
+                "DEX" => Dexterity,
+                "CON" => Constitution,
+                "INT" => Intelligence,
+                "WIS" => Wisdom,
+                "CHA" => Charisma,
+                _ => 10
+            };
+            return (score - 10) / 2;
+        }
+
+
     }
 
     public class CreateCharacterDto
@@ -53,6 +86,8 @@
         public int ArmorClass { get; set; } = 10;
         public int MaxHitPoints { get; set; } = 10;
         public int CurrentHitPoints { get; set; } = 10;
+        public List<Skill> Skills { get; set; }
+
     }
 
     public class UpdateCharacterDto
@@ -75,6 +110,7 @@
         public int ArmorClass { get; set; }
         public int MaxHitPoints { get; set; }
         public int CurrentHitPoints { get; set; }
+        public List<Skill> Skills { get; set; }
     }
 
     public class CharacterClassDto

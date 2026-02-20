@@ -10,7 +10,7 @@ namespace BlazorApp1.Models
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public bool isPrivate { get; set; }
-        public List<Tag>? Tags { get; set; }
+        public List<EntryTag>? Tags { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? LastUpdatedAt { get; set; }
 

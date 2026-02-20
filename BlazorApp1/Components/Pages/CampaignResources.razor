@@ -1,0 +1,529 @@
+@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@using System.Net.Http.Headers
+
+@inject HttpClient Http
+@inject IHttpClientFactory HttpClientFactory
+
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@inject AntiforgeryStateProvider AntiforgeryStateProvider
+@inject ResourceService ResourceService
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Campaign Resources</h3>
+        @if (IsDM)
+        {
+            <button class="btn btn-primary" @onclick="ShowUploadModal">
+                <i class="bi bi-upload"></i> Upload Resource
+            </button>
+        }
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (resources.Count == 0)
+    {
+        <div class="alert alert-info">
+            No resources have been shared in this campaign yet.
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var resource in resources)
+            {
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card h-100">
+                        @if(resource.Type == "Image" || resource.Type == "Map")
+                        {
+                            <img src="@GetDownloadUrl(resource.ResourceId)"
+                                 class="card-img-top"
+                                 alt="@resource.Name"
+                                 style="max-height: 200px; object-fit: cover; cursor: pointer;"
+                                 @onclick="() => ShowImageModal(resource)" />
+                        }
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title">@resource.Name</h5>
+                                
+                                @if (resource.Type == "Image")
+                                {
+                                    <i class="bi bi-image text-primary"></i>
+                                    
+                                }
+                                else if (resource.Type == "Document")
+                                {
+                                    <i class="bi bi-file-text text-info"></i>
+                                }
+                                else if (resource.Type == "Map")
+                                {
+                                    <i class="bi bi-map text-success"></i>
+                                }
+                                else if (resource.Type == "Audio")
+                                {
+                                    <i class="bi bi-music-note text-warning"></i>
+                                }
+                                else
+                                {
+                                    <span>????</span>
+                                }
+                            </div>
+                            <p class="card-text text-muted small">@resource.Description</p>
+                            
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-person"></i> @resource.UploadedByName
+                                </small>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar"></i> @resource.CreatedDate.ToShortDateString()
+                                </small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                @if (resource.Shares.Any(s => s.ShareType == "EntireCampaign"))
+                                {
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-people"></i> Shared with everyone
+                                    </span>
+                                }
+                                else if (resource.Shares.Any())
+                                {
+                                    <span class="badge bg-info">
+                                        <i class="bi bi-person-check"></i> Shared with @resource.Shares.Count
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-lock"></i> Private
+                                    </span>
+                                }
+                            </div>
+                            
+                            <div class="btn-group w-100" role="group">
+                                <a href="@GetDownloadUrl(resource.ResourceId)" 
+                                   class="btn btn-sm btn-outline-primary" 
+                                   download="@resource.FileName">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                                
+                                @if (IsDM || resource.UploadedById == CurrentUserId)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary" 
+                                            @onclick="() => ShowShareModal(resource)">
+                                        <i class="bi bi-share"></i> Share
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" 
+                                            @onclick="() => DeleteResource(resource.ResourceId)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Upload Modal -->
+@if (showUploadModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload Resource</h5>
+                    <button type="button" class="btn-close" @onclick="CloseUploadModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Resource Name</label>
+                        <input type="text" class="form-control" @bind="newResourceName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" rows="3" @bind="newResourceDescription"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">File</label>
+                        <InputFile OnChange="HandleFileSelected" class="form-control" />
+                        @if (selectedFile != null)
+                        {
+                            <small class="text-muted">
+                                Selected: @selectedFile.Name (@FormatFileSize(selectedFile.Size))
+                            </small>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(uploadError))
+                    {
+                        <div class="alert alert-danger">@uploadError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseUploadModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="UploadResource" disabled="@isUploading">
+                        @if (isUploading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Upload
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Share Modal -->
+@if (showShareModal && selectedResource != null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Share: @selectedResource.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseShareModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Share With</label>
+                        <select class="form-select" @bind="shareType">
+                            <option value="EntireCampaign">Entire Campaign</option>
+                            <option value="SpecificUsers">Specific Players</option>
+                            <option value="SpecificCharacters">Specific Characters</option>
+                        </select>
+                    </div>
+                    
+                    @if (shareType == "SpecificUsers")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Select Players</label>
+                            @foreach (var member in campaignMembers)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" 
+                                           checked="@selectedUserIds.Contains(member.UserId)"
+                                           @onchange="e => ToggleUser(member.UserId, e)">
+                                    <label class="form-check-label">
+                                        @member.Username @(member.Role == "DM" ? "(DM)" : "")
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (shareType == "SpecificCharacters")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Select Characters</label>
+                            @foreach (var character in campaignCharacters)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           checked="@selectedCharacterIds.Contains(character.CharacterId)"
+                                           @onchange="e => ToggleCharacter(character.CharacterId, e)">
+                                    <label class="form-check-label">
+                                        @character.Name (@character.PlayerName)
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseShareModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="ShareResource">
+                        Share
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    }<!-- Image Preview Modal -->
+    @if (showImageModal && selectedImageResource != null)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.8);" @onclick="CloseImageModal">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content bg-transparent border-0" @onclick:stopPropagation="true">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title text-white">@selectedImageResource.Name</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="CloseImageModal"></button>
+                    </div>
+                    <div class="modal-body text-center p-0">
+                        <img src="@GetDownloadUrl(selectedImageResource.ResourceId)"
+                             class="img-fluid"
+                             alt="@selectedImageResource.Name"
+                             style="max-height: 80vh; width: auto;" />
+                    </div>
+                    <div class="modal-footer border-0 justify-content-center">
+                        <p class="text-white mb-0">@selectedImageResource.Description</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
+}
+
+@code {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    [Parameter] public int CampaignId { get; set; }
+    [Parameter] public bool IsDM { get; set; }
+    [Parameter] public string CurrentUserId { get; set; } = string.Empty;
+    [Parameter] public List<CampaignMemberDto> CampaignMembers { get; set; } = new();
+    [Parameter] public List<CharacterDto> CampaignCharacters { get; set; } = new();
+
+    private List<ResourceDto> resources = new();
+    private List<CampaignMemberDto> campaignMembers = new();
+    private List<CharacterDto> campaignCharacters = new();
+    private bool isLoading = true;
+
+    private bool showImageModal = false;
+    private ResourceDto? selectedImageResource;
+
+    private AntiforgeryRequestToken antiforgeryToken;
+    // Upload modal
+    private bool showUploadModal = false;
+    private string newResourceName = string.Empty;
+    private string newResourceDescription = string.Empty;
+    private IBrowserFile? selectedFile;
+    private bool isUploading = false;
+    private string uploadError = string.Empty;
+
+    // Share modal
+    private bool showShareModal = false;
+    private ResourceDto? selectedResource;
+    private string shareType = "EntireCampaign";
+    private List<string> selectedUserIds = new();
+    private List<int> selectedCharacterIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        campaignMembers = CampaignMembers;
+        campaignCharacters = CampaignCharacters;
+
+        //antiforgeryToken = await AntiforgeryStateProvider.GetAntiforgeryTokenAsync();
+        await LoadResources();
+    }
+
+    private async Task LoadResources()
+    {
+        isLoading = true;
+        try
+        {
+
+            resources = await ResourceService.GetCampaignResourcesAsync(CampaignId);
+            /*resources = await Http.GetFromJsonAsync<List<ResourceDto>>($"api/Resources/campaign/{CampaignId}") 
+                ?? new List<ResourceDto>();*/
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading resources: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowUploadModal()
+    {
+        newResourceName = string.Empty;
+        newResourceDescription = string.Empty;
+        selectedFile = null;
+        uploadError = string.Empty;
+        showUploadModal = true;
+    }
+
+    private void CloseUploadModal()
+    {
+        showUploadModal = false;
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+    }
+
+    private async Task UploadResource()
+    {
+        if (selectedFile == null)
+        {
+            uploadError = "Please select a file";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newResourceName))
+        {
+            uploadError = "Please enter a resource name";
+            return;
+        }
+
+        isUploading = true;
+        uploadError = string.Empty;
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+
+            var fileContent = new StreamContent(selectedFile.OpenReadStream(52428800)); // 50MB max
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(selectedFile.ContentType);
+            content.Add(fileContent, "file", selectedFile.Name);
+            content.Add(new StringContent(newResourceName), "Name");
+            content.Add(new StringContent(newResourceDescription), "Description");
+            content.Add(new StringContent(CampaignId.ToString()), "CampaignId");
+
+            var response = await Http.PostAsync("api/Resources/upload", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadResources();
+                CloseUploadModal();
+            }
+            else
+            {
+
+                var errorContent = await response.Content.ReadAsStringAsync();
+                uploadError = $"Upload failed: {response.StatusCode} - {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private void ShowShareModal(ResourceDto resource)
+    {
+        selectedResource = resource;
+        shareType = resource.Shares.Any(s => s.ShareType == "EntireCampaign") ? "EntireCampaign" : "SpecificUsers";
+        selectedUserIds = resource.Shares.Where(s => s.UserId != null).Select(s => s.UserId!).ToList();
+        selectedCharacterIds = resource.Shares.Where(s => s.CharacterId != null).Select(s => s.CharacterId!.Value).ToList();
+        showShareModal = true;
+    }
+
+    private void CloseShareModal()
+    {
+        showShareModal = false;
+        selectedResource = null;
+    }
+
+    private void ShowImageModal(ResourceDto resource)
+    {
+        selectedImageResource = resource;
+        showImageModal = true;
+    }
+
+    private void CloseImageModal()
+    {
+        showImageModal = false;
+        selectedImageResource = null;
+    }
+
+    private void ToggleUser(string userId, ChangeEventArgs e)
+    {
+        if ((bool)e.Value!)
+        {
+            if (!selectedUserIds.Contains(userId))
+                selectedUserIds.Add(userId);
+        }
+        else
+        {
+            selectedUserIds.Remove(userId);
+        }
+    }
+
+    private void ToggleCharacter(int characterId, ChangeEventArgs e)
+    {
+        if ((bool)e.Value!)
+        {
+            if (!selectedCharacterIds.Contains(characterId))
+                selectedCharacterIds.Add(characterId);
+        }
+        else
+        {
+            selectedCharacterIds.Remove(characterId);
+        }
+    }
+
+    private async Task ShareResource()
+    {
+        if (selectedResource == null) return;
+
+        var shareDto = new ShareResourceDto
+        {
+            ResourceId = selectedResource.ResourceId,
+            ShareType = shareType,
+            UserIds = shareType == "SpecificUsers" ? selectedUserIds : null,
+            CharacterIds = shareType == "SpecificCharacters" ? selectedCharacterIds : null
+        };
+
+        //var response = await Http.PostAsJsonAsync($"api/Resources/{selectedResource.ResourceId}/share", shareDto);
+        var response = await ResourceService.ShareResource(selectedResource.ResourceId, shareDto);
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadResources();
+            CloseShareModal();
+        }
+    }
+    
+    private async Task DeleteResource(int resourceId)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this resource?"))
+            return;
+        
+        var response = await Http.DeleteAsync($"api/Resources/{resourceId}");
+        
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadResources();
+        }
+    }
+    
+    private string GetDownloadUrl(int resourceId)
+    {
+        return $"/api/Resources/file/{resourceId}";
+    }
+    
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+}

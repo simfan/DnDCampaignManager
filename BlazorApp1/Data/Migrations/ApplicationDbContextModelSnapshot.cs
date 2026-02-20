@@ -216,6 +216,9 @@ namespace BlazorApp1.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SkillsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Strength")
                         .HasColumnType("int");
 
@@ -257,6 +260,112 @@ namespace BlazorApp1.Migrations
                     b.ToTable("CharacterClasses");
                 });
 
+            modelBuilder.Entity("BlazorApp1.Models.ChatMessage", b =>
+                {
+                    b.Property<int>("ChatMessageId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ChatMessageId"));
+
+                    b.Property<int>("ChatRoomId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("EditedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsEdited")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SenderId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("ChatMessageId");
+
+                    b.HasIndex("ChatRoomId");
+
+                    b.HasIndex("SenderId");
+
+                    b.ToTable("ChatMessages");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.ChatRoom", b =>
+                {
+                    b.Property<int>("ChatRoomId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ChatRoomId"));
+
+                    b.Property<int?>("CampaignId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedById")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("LastMessageAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("ChatRoomId");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("CreatedById");
+
+                    b.ToTable("ChatRooms");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.ChatRoomMember", b =>
+                {
+                    b.Property<int>("ChatRoomMemberId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ChatRoomMemberId"));
+
+                    b.Property<int>("ChatRoomId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ChatRoomMemberId");
+
+                    b.HasIndex("ChatRoomId");
+
+                    b.HasIndex("UserId", "ChatRoomId")
+                        .IsUnique();
+
+                    b.ToTable("ChatRoomMembers");
+                });
+
             modelBuilder.Entity("BlazorApp1.Models.Entry", b =>
                 {
                     b.Property<int>("EntryId")
@@ -267,7 +376,7 @@ namespace BlazorApp1.Migrations
 
                     b.Property<string>("AuthorId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -291,11 +400,24 @@ namespace BlazorApp1.Migrations
 
                     b.HasKey("EntryId");
 
-                    b.HasIndex("AuthorId");
-
                     b.HasIndex("JournalId");
 
                     b.ToTable("Entries");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.EntryTag", b =>
+                {
+                    b.Property<int>("EntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("int");
+
+                    b.HasKey("EntryId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("EntryTag");
                 });
 
             modelBuilder.Entity("BlazorApp1.Models.Journal", b =>
@@ -328,6 +450,165 @@ namespace BlazorApp1.Migrations
                     b.ToTable("Journals");
                 });
 
+            modelBuilder.Entity("BlazorApp1.Models.JournalTag", b =>
+                {
+                    b.Property<int>("JournalId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("int");
+
+                    b.HasKey("JournalId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("JournalTag");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.PlayerEvent", b =>
+                {
+                    b.Property<int>("PlayerEventId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PlayerEventId"));
+
+                    b.Property<int?>("CampaignId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<TimeSpan?>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("EventDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<TimeSpan?>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("PlayerEventId");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PlayerEvents");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.Resource", b =>
+                {
+                    b.Property<int>("ResourceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ResourceId"));
+
+                    b.Property<int>("CampaignId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastModifiedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UploadedById")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ResourceId");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("UploadedById");
+
+                    b.ToTable("Resources");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.ResourceShare", b =>
+                {
+                    b.Property<int>("ResourceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CharacterId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ResourceShareId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ShareType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SharedById")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("SharedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ResourceId");
+
+                    b.HasIndex("CharacterId");
+
+                    b.HasIndex("SharedById");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ResourceShares");
+                });
+
             modelBuilder.Entity("BlazorApp1.Models.Tag", b =>
                 {
                     b.Property<int>("TagId")
@@ -336,21 +617,11 @@ namespace BlazorApp1.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TagId"));
 
-                    b.Property<int?>("EntryId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("JournalId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("TagId");
-
-                    b.HasIndex("EntryId");
-
-                    b.HasIndex("JournalId");
 
                     b.ToTable("Tags");
                 });
@@ -569,14 +840,64 @@ namespace BlazorApp1.Migrations
                     b.Navigation("Character");
                 });
 
-            modelBuilder.Entity("BlazorApp1.Models.Entry", b =>
+            modelBuilder.Entity("BlazorApp1.Models.ChatMessage", b =>
                 {
-                    b.HasOne("BlazorApp1.Data.ApplicationUser", null)
+                    b.HasOne("BlazorApp1.Models.ChatRoom", "ChatRoom")
+                        .WithMany("Messages")
+                        .HasForeignKey("ChatRoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BlazorApp1.Data.ApplicationUser", "Sender")
                         .WithMany()
-                        .HasForeignKey("AuthorId")
+                        .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("ChatRoom");
+
+                    b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.ChatRoom", b =>
+                {
+                    b.HasOne("BlazorApp1.Models.Campaign", "Campaign")
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("BlazorApp1.Data.ApplicationUser", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.ChatRoomMember", b =>
+                {
+                    b.HasOne("BlazorApp1.Models.ChatRoom", "ChatRoom")
+                        .WithMany("Members")
+                        .HasForeignKey("ChatRoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BlazorApp1.Data.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChatRoom");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.Entry", b =>
+                {
                     b.HasOne("BlazorApp1.Models.Journal", "Journal")
                         .WithMany("Entries")
                         .HasForeignKey("JournalId")
@@ -586,15 +907,111 @@ namespace BlazorApp1.Migrations
                     b.Navigation("Journal");
                 });
 
-            modelBuilder.Entity("BlazorApp1.Models.Tag", b =>
+            modelBuilder.Entity("BlazorApp1.Models.EntryTag", b =>
                 {
-                    b.HasOne("BlazorApp1.Models.Entry", null)
+                    b.HasOne("BlazorApp1.Models.Entry", "Entry")
                         .WithMany("Tags")
-                        .HasForeignKey("EntryId");
+                        .HasForeignKey("EntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.HasOne("BlazorApp1.Models.Journal", null)
+                    b.HasOne("BlazorApp1.Models.Tag", "Tag")
+                        .WithMany("EntryTags")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Entry");
+
+                    b.Navigation("Tag");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.JournalTag", b =>
+                {
+                    b.HasOne("BlazorApp1.Models.Journal", "Journal")
                         .WithMany("Tags")
-                        .HasForeignKey("JournalId");
+                        .HasForeignKey("JournalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BlazorApp1.Models.Tag", "Tag")
+                        .WithMany("JournalTags")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Journal");
+
+                    b.Navigation("Tag");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.PlayerEvent", b =>
+                {
+                    b.HasOne("BlazorApp1.Models.Campaign", "Campaign")
+                        .WithMany()
+                        .HasForeignKey("CampaignId");
+
+                    b.HasOne("BlazorApp1.Data.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.Resource", b =>
+                {
+                    b.HasOne("BlazorApp1.Models.Campaign", "Campaign")
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BlazorApp1.Data.ApplicationUser", "UploadedBy")
+                        .WithMany()
+                        .HasForeignKey("UploadedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("UploadedBy");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.ResourceShare", b =>
+                {
+                    b.HasOne("BlazorApp1.Models.Character", "Character")
+                        .WithMany()
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BlazorApp1.Models.Resource", "Resource")
+                        .WithMany("Shares")
+                        .HasForeignKey("ResourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BlazorApp1.Data.ApplicationUser", "SharedBy")
+                        .WithMany()
+                        .HasForeignKey("SharedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BlazorApp1.Data.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Character");
+
+                    b.Navigation("Resource");
+
+                    b.Navigation("SharedBy");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -720,6 +1137,13 @@ namespace BlazorApp1.Migrations
                     b.Navigation("Classes");
                 });
 
+            modelBuilder.Entity("BlazorApp1.Models.ChatRoom", b =>
+                {
+                    b.Navigation("Members");
+
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("BlazorApp1.Models.Entry", b =>
                 {
                     b.Navigation("Tags");
@@ -730,6 +1154,18 @@ namespace BlazorApp1.Migrations
                     b.Navigation("Entries");
 
                     b.Navigation("Tags");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.Resource", b =>
+                {
+                    b.Navigation("Shares");
+                });
+
+            modelBuilder.Entity("BlazorApp1.Models.Tag", b =>
+                {
+                    b.Navigation("EntryTags");
+
+                    b.Navigation("JournalTags");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,0 +1,73 @@
+﻿@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@using BlazorStrap
+@using BlazorStrap.V5
+@inject JournalService JournalService;
+
+<h3>@Journal.Name</h3>
+<div>
+    <BSButton Color="BSColor.Primary" OnClick="ShowModal">Add Entry</BSButton>
+    @if(Journal.Entries != null && Journal.Entries.Count()> 0)
+    {
+        @foreach(var entry in Journal.Entries)
+        {
+            <h5>@entry.Title</h5>
+            <div>@entry.Content</div>
+        }
+    }
+    else
+    {
+        <div>No Entries</div>
+    }
+</div>
+<BSModal @ref="createEntryModal">
+    <Header>New Journal Entry</Header>
+    <Content>
+            <div class="mb-3">
+                <BSInput InputType="InputType.Text" @bind-Value="newEntry.Title"/>
+                <BSLabel>Title</BSLabel>
+            </div>
+            <div class="mb-3">
+                <BSInput InputType="InputType.TextArea" @bind-Value="newEntry.Content"/> 
+                <BSLabel>Content</BSLabel>
+            </div>
+            <BSButton Color="BSColor.Primary" OnClick="CreateJournalEntry">Save Entry</BSButton>
+    </Content>
+
+</BSModal>
+@code {
+    [Parameter]
+    public JournalDetailDto Journal { get; set; }
+
+    //private EditContext? EC;
+    private CreateEntryDto newEntry = new();
+    private EntryDto journalEntry = new();
+    private bool showCreateEntryModal = false;
+
+    private BSModal createEntryModal;
+    private BSForm<CreateEntryDto> createEntryForm;
+    protected override void OnInitialized()
+    {
+       // EC = new EditContext(newEntry);
+    }
+
+    private void ShowModal()
+    {
+        createEntryModal.ShowAsync();
+        //StateHasChanged();
+    }
+
+    private async Task CreateJournalEntry()
+    {
+        newEntry.JournalId = Journal.JournalId;
+        newEntry.AuthorId = Journal.OwnerId;
+        newEntry.IsPrivate = true;
+        journalEntry = await JournalService.CreateJournalEntry(newEntry);
+        var journalEntryDetail = journalEntry.ToDetailDto();
+        Journal.Entries.Add(journalEntryDetail);
+        createEntryModal.HideAsync();
+        StateHasChanged();
+        //Create Journal Entry
+        //var journalEntry = await EntryS
+    }
+}
