@@ -2,7 +2,9 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
 @using BlazorApp1.DTOs
+@using BlazorApp1.Models
 @using BlazorApp1.Services
 @inject CampaignService CampaignService
 @inject CharacterService CharacterService
@@ -319,6 +321,66 @@
                     </div>
                 }
             </div>
+            <!-- Dice Roll History -->
+            <div class="col-12 col-lg-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-dice-5"></i> Roll History
+                        </h5>
+                        <span class="badge bg-secondary">Live</span>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (rollHistory.Count == 0)
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-dice-5" style="font-size: 3rem;"></i>
+                                <p class="mt-2">No rolls yet — press a dice button on your Stream Deck!</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var (roll, index) in rollHistory.Select((r, i) => (r, i)))
+                                {
+                                    <div class="list-group-item @(index == 0 ? "roll-latest" : "")">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <span class="fw-bold @GetRollTypeColor(roll.RollType)">
+                                                    @roll.RollType
+                                                </span>
+                                                <span class="text-muted ms-2 small">@roll.DiceNotation</span>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="@GetRollResultClass(roll) fs-5 fw-bold">
+                                                    @roll.FinalTotal
+                                                </span>
+                                                @if (roll.Modifier != 0)
+                                                {
+                                                    <span class="text-muted small ms-1">
+                                                        (@(roll.Modifier > 0 ? "+" : "")@roll.Modifier)
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                        @if (IsCrit(roll))
+                                        {
+                                            <span class="badge bg-success">Natural 20!</span>
+                                        }
+                                        else if (IsFumble(roll))
+                                        {
+                                            <span class="badge bg-danger">Natural 1</span>
+                                        }
+                                        <div class="text-muted" style="font-size: 0.7rem;">
+                                            @roll.Timestamp.ToLocalTime().ToString("h:mm:ss tt")
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
 
             <!-- Shared Resources Section (Placeholder) -->
             <div class="col-12">
@@ -451,6 +513,24 @@
     .calendar-day.selected .event-indicator {
         background-color: white;
     }
+
+    .roll-latest {
+        background-color: #fff8e1;
+        border-left: 4px solid #ffc107 !important;
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 </style>
 <!--<script>
     window.downloadFileFromStream = async (fileName, contentStreamReference) => {
@@ -473,9 +553,12 @@
     private DateTime currentDate = DateTime.Today;
     private DateTime? selectedDate = null;
     private IJSObjectReference? jsModule;
+    private HubConnection? rollHubConnection;
+    private List<DiceRoll> rollHistory = new();
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
+        await ConnectToRollHub();
         try
         {
             campaigns = await CampaignService.GetCampaignsAsync();
@@ -668,10 +751,52 @@
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
+        if (rollHubConnection is not null)
+            await rollHubConnection.DisposeAsync();
+
         if (jsModule is not null)
         {
             await jsModule.DisposeAsync();
         }
     }
+    private async Task ConnectToRollHub()
+    {
+        rollHubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/rollhub"))
+            .WithAutomaticReconnect()
+            .Build();
 
+        rollHubConnection.On<DiceRoll>("ReceiveRoll", (roll) =>
+        {
+            rollHistory.Insert(0, roll);
+            if (rollHistory.Count > 10)
+                rollHistory.RemoveAt(rollHistory.Count - 1);
+            InvokeAsync(StateHasChanged);
+        });
+
+        await rollHubConnection.StartAsync();
+    }
+
+    private string GetRollTypeColor(string rollType) => rollType switch
+    {
+        "Skill Check" => "text-primary",
+        "Saving Throw" => "text-success",
+        "Attack Roll" => "text-danger",
+        "Initiative" => "text-warning",
+        "Damage Roll" => "text-info",
+        _ => "text-secondary"
+    };
+
+    private string GetRollResultClass(DiceRoll roll)
+    {
+        if (IsCrit(roll)) return "text-success";
+        if (IsFumble(roll)) return "text-danger";
+        return "";
+    }
+
+    private bool IsCrit(DiceRoll roll) =>
+        roll.Results?.Count == 1 && roll.Results[0] == 20;
+
+    private bool IsFumble(DiceRoll roll) =>
+        roll.Results?.Count == 1 && roll.Results[0] == 1;
 }

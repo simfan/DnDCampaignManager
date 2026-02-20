@@ -1,6 +1,8 @@
+using BlazorApp1.Hubs;
 using BlazorApp1.Models;
 using BlazorApp1.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace BlazorApp1.Controllers
 {
@@ -14,10 +16,11 @@ namespace BlazorApp1.Controllers
     public class DiceController : ControllerBase
     {
         private readonly DiceService _diceService;
-
-        public DiceController(DiceService diceService)
+        private readonly IHubContext<RollHub> _rollHub;
+        public DiceController(DiceService diceService, IHubContext<RollHub> rollHub)
         {
             _diceService = diceService;
+            _rollHub = rollHub;
         }
 
         // POST /api/dice/skillcheck
@@ -77,6 +80,14 @@ namespace BlazorApp1.Controllers
             {
                 return BadRequest(ex.Message);
             }
+        }
+
+        // POST /api/dice/notify
+        [HttpPost("notify")]
+        public async Task<IActionResult> Notify([FromBody] DiceRoll roll)
+        {
+            await _rollHub.Clients.All.SendAsync("ReceiveRoll", roll);
+            return Ok();
         }
     }
 
