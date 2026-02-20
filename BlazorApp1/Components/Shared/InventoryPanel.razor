@@ -1,0 +1,477 @@
+﻿@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@inject InventoryService InventoryService
+
+@*
+    Usage – character inventory (party chest + all other party members as destinations):
+        <InventoryPanel CharacterId="@character.CharacterId"
+                        CampaignId="@character.CampaignId"
+                        PartyCharacters="@campaign.Characters" />
+
+    Usage – campaign (party chest) inventory (all party members as destinations):
+        <InventoryPanel CampaignId="@campaign.CampaignId"
+                        PartyCharacters="@campaign.Characters" />
+*@
+
+<div class="inventory-panel">
+    @if (isLoading)
+    {
+        <div class="text-center py-3">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <span class="ms-2">Loading inventory...</span>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted small">
+                @items.Count item(s) &nbsp;|&nbsp;
+                @*Total weight: @(items.Sum(i => (i.Weight ?? 0) * i.Quantity):F1) lb &nbsp;|&nbsp;
+                Total value: @(items.Sum(i => (i.Value ?? 0) * i.Quantity):F1) gp*@
+            </span>
+            <button class="btn btn-sm btn-primary" @onclick="ShowAddModal">
+                <i class="bi bi-plus-circle"></i> Add Item
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @errorMessage
+                <button type="button" class="btn-close" @onclick='() => errorMessage = null'></button>
+            </div>
+        }
+
+        @if (items.Count == 0)
+        {
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-bag" style="font-size: 2rem;"></i>
+                <p class="mt-2">No items yet. Add one above!</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var group in items.GroupBy(i => i.Category ?? "Miscellaneous").OrderBy(g => g.Key))
+            {
+                <h6 class="text-muted mt-3 mb-1 border-bottom pb-1">
+                    <i class="bi bi-tag"></i> @group.Key
+                </h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th style="width:60px" class="text-center">Qty</th>
+                                <th style="width:70px" class="text-center">Weight</th>
+                                <th style="width:70px" class="text-center">Value</th>
+                                <th style="width:80px" class="text-center">Equipped</th>
+                                <th style="width:130px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in group.OrderBy(i => i.Name))
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="fw-semibold">@item.Name</span>
+                                        @if (!string.IsNullOrEmpty(item.Description))
+                                        {
+                                            <br />
+                        
+                                            <small class="text-muted">@item.Description</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">@item.Quantity</td>
+                                    <td class="text-center">@(item.Weight.HasValue ? $"{item.Weight:F1}" : "–")</td>
+                                    <td class="text-center">@(item.Value.HasValue ? $"{item.Value:F1}gp" : "–")</td>
+                                    <td class="text-center">
+                                        @if (item.IsEquipped)
+                                        {
+                                            <span class="badge bg-success">Equipped</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">–</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-outline-secondary btn-sm me-1" title="Edit"
+                                                @onclick="() => ShowEditModal(item)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        @if (TransferDestinations.Any())
+                                        {
+                                            <button class="btn btn-outline-info btn-sm me-1" title="Transfer"
+                                                    @onclick="() => ShowTransferModal(item)">
+                                                <i class="bi bi-arrow-left-right"></i>
+                                            </button>
+                                        }
+                                        <button class="btn btn-outline-danger btn-sm" title="Delete"
+                                                @onclick="() => DeleteItem(item)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    }
+</div>
+
+@* ── Add / Edit Modal ──────────────────────────────────────────────────── *@
+@if (showItemModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editingItem == null ? "Add Item" : "Edit Item")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseItemModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name *</label>
+                        <input class="form-control" @bind="formName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" @bind="formCategory">
+                            <option value="">— Select —</option>
+                            <option>Weapon</option>
+                            <option>Armor</option>
+                            <option>Consumable</option>
+                            <option>Tool</option>
+                            <option>Treasure</option>
+                            <option>Magic Item</option>
+                            <option>Miscellaneous</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" rows="2" @bind="formDescription"></textarea>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <label class="form-label">Quantity</label>
+                            <input type="number" class="form-control" min="1" @bind="formQuantity" />
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Weight (lb)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="formWeight" />
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Value (gp)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="formValue" />
+                        </div>
+                    </div>
+                    @if (CharacterId.HasValue)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="formIsEquipped" />
+                            <label class="form-check-label">Equipped</label>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseItemModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveItem" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Transfer Modal ────────────────────────────────────────────────────── *@
+@if (showTransferModal && transferItem != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-arrow-left-right"></i> Transfer "@transferItem.Name"
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseTransferModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Send to</label>
+                        <select class="form-select" @bind="selectedDestinationKey">
+                            <option value="">— Choose destination —</option>
+                            @foreach (var dest in TransferDestinations)
+                            {
+                                <option value="@dest.Key">@dest.Label</option>
+                            }
+                        </select>
+                    </div>
+                    @if (transferItem.Quantity > 1)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Quantity to transfer (max @transferItem.Quantity)</label>
+                            <input type="number" class="form-control" min="1" max="@transferItem.Quantity"
+                                   @bind="transferQuantity" />
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseTransferModal">Cancel</button>
+                    <button class="btn btn-info text-white" @onclick="DoTransfer"
+                            disabled="@(isSaving || string.IsNullOrEmpty(selectedDestinationKey))">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Transfer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    /// <summary>Set when showing a character's personal inventory.</summary>
+    [Parameter] public int? CharacterId { get; set; }
+
+    /// <summary>Always required. The campaign this inventory belongs to.</summary>
+    [Parameter] public int? CampaignId { get; set; }
+
+    /// <summary>
+    /// All characters in the party. Used to build transfer destinations.
+    /// The current character (CharacterId) is automatically excluded from the list.
+    /// </summary>
+    [Parameter] public List<CharacterDto> PartyCharacters { get; set; } = new();
+
+    /// <summary>Raised after a successful transfer so the parent can refresh if needed.</summary>
+    [Parameter] public EventCallback OnTransferred { get; set; }
+
+    // ── Transfer destination helpers ──────────────────────────────────────────
+
+    private record TransferDestination(string Key, string Label, int? ToCharacterId, int? ToCampaignId);
+
+    private List<TransferDestination> TransferDestinations
+    {
+        get
+        {
+            var list = new List<TransferDestination>();
+
+            // Party chest — only show when we're on a character's inventory
+            if (CharacterId.HasValue && CampaignId.HasValue)
+                list.Add(new("campaign", "Party Chest", null, CampaignId));
+
+            // All other party members
+            foreach (var c in PartyCharacters.Where(c => c.CharacterId != CharacterId))
+                list.Add(new($"char_{c.CharacterId}", $"{c.Name} ({c.PlayerName})", c.CharacterId, null));
+
+            return list;
+        }
+    }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    private List<InventoryItemDto> items = new();
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? errorMessage;
+
+    // Item modal
+    private bool showItemModal = false;
+    private InventoryItemDto? editingItem;
+    private string formName = "";
+    private string? formCategory;
+    private string? formDescription;
+    private int formQuantity = 1;
+    private decimal? formWeight;
+    private decimal? formValue;
+    private bool formIsEquipped = false;
+
+    // Transfer modal
+    private bool showTransferModal = false;
+    private InventoryItemDto? transferItem;
+    private int transferQuantity = 1;
+    private string selectedDestinationKey = "";
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadItems();
+    }
+
+    public async Task LoadItems()
+    {
+        isLoading = true;
+        try
+        {
+            if (CharacterId.HasValue)
+                items = await InventoryService.GetCharacterInventoryAsync(CharacterId.Value);
+            else if (CampaignId.HasValue)
+                items = await InventoryService.GetCampaignInventoryAsync(CampaignId.Value);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    // ── Add / Edit ────────────────────────────────────────────────────────────
+
+    private void ShowAddModal()
+    {
+        editingItem = null;
+        formName = "";
+        formCategory = null;
+        formDescription = null;
+        formQuantity = 1;
+        formWeight = null;
+        formValue = null;
+        formIsEquipped = false;
+        showItemModal = true;
+    }
+
+    private void ShowEditModal(InventoryItemDto item)
+    {
+        editingItem = item;
+        formName = item.Name;
+        formCategory = item.Category;
+        formDescription = item.Description;
+        formQuantity = item.Quantity;
+        formWeight = item.Weight;
+        formValue = item.Value;
+        formIsEquipped = item.IsEquipped;
+        showItemModal = true;
+    }
+
+    private void CloseItemModal() => showItemModal = false;
+
+    private async Task SaveItem()
+    {
+        if (string.IsNullOrWhiteSpace(formName)) return;
+
+        isSaving = true;
+        errorMessage = null;
+        try
+        {
+            if (editingItem == null)
+            {
+                var dto = new CreateInventoryItemDto
+                {
+                    Name = formName,
+                    Category = formCategory,
+                    Description = formDescription,
+                    Quantity = formQuantity,
+                    Weight = formWeight,
+                    Value = formValue,
+                    IsEquipped = formIsEquipped,
+                    CharacterId = CharacterId,
+                    CampaignId = CharacterId == null ? CampaignId : null
+                };
+                var created = await InventoryService.CreateItemAsync(dto);
+                if (created != null) items.Add(created);
+            }
+            else
+            {
+                var dto = new UpdateInventoryItemDto
+                {
+                    Name = formName,
+                    Category = formCategory,
+                    Description = formDescription,
+                    Quantity = formQuantity,
+                    Weight = formWeight,
+                    Value = formValue,
+                    IsEquipped = formIsEquipped
+                };
+                var updated = await InventoryService.UpdateItemAsync(editingItem.InventoryItemId, dto);
+                if (updated != null)
+                {
+                    var idx = items.FindIndex(i => i.InventoryItemId == updated.InventoryItemId);
+                    if (idx >= 0) items[idx] = updated;
+                }
+            }
+            CloseItemModal();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving item: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────
+
+    private async Task DeleteItem(InventoryItemDto item)
+    {
+        errorMessage = null;
+        var success = await InventoryService.DeleteItemAsync(item.InventoryItemId);
+        if (success)
+            items.Remove(item);
+        else
+            errorMessage = "Failed to delete item.";
+    }
+
+    // ── Transfer ──────────────────────────────────────────────────────────────
+
+    private void ShowTransferModal(InventoryItemDto item)
+    {
+        transferItem = item;
+        transferQuantity = item.Quantity;
+        // Auto-select if there's only one possible destination
+        selectedDestinationKey = TransferDestinations.Count == 1
+            ? TransferDestinations[0].Key
+            : "";
+        showTransferModal = true;
+    }
+
+    private void CloseTransferModal() => showTransferModal = false;
+
+    private async Task DoTransfer()
+    {
+        if (transferItem == null || string.IsNullOrEmpty(selectedDestinationKey)) return;
+
+        var dest = TransferDestinations.FirstOrDefault(d => d.Key == selectedDestinationKey);
+        if (dest == null) return;
+
+        isSaving = true;
+        errorMessage = null;
+        try
+        {
+            var dto = new TransferInventoryItemDto
+            {
+                InventoryItemId = transferItem.InventoryItemId,
+                ToCharacterId = dest.ToCharacterId,
+                ToCampaignId = dest.ToCampaignId,
+                QuantityToTransfer = transferQuantity < transferItem.Quantity ? transferQuantity : null
+            };
+
+            var result = await InventoryService.TransferItemAsync(dto);
+            if (result != null)
+            {
+                await LoadItems();
+                CloseTransferModal();
+                await OnTransferred.InvokeAsync();
+            }
+            else
+            {
+                errorMessage = "Transfer failed.";
+            }
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

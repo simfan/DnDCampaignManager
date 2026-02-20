@@ -1,10 +1,13 @@
 ﻿@page "/characters/{CharacterId:int}"
 @rendermode InteractiveServer
+@using BlazorApp1.Components.Shared
 @using BlazorApp1.DTOs
 @using BlazorApp1.Models
 @using BlazorApp1.Services
 @using Microsoft.AspNetCore.Authorization
+@inject CampaignService CampaignService
 @inject CharacterService CharacterService
+@inject InventoryService InventoryService
 @inject NavigationManager Navigation
 @inject DiceService DiceService
 @inject IJSRuntime JSRuntime
@@ -248,7 +251,23 @@
                 </div>
             </div>
         </div>
-
+        <div class="row">
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-bag"></i> Inventory</h5>
+                        </div>
+                        <div class="card-body">
+                            <InventoryPanel CharacterId="@character.CharacterId"
+                                            CampaignId="@character.CampaignId"
+                                            PartyCharacters="@partyCharacters"
+                                            OnTransferred="EventCallback.Empty" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         @if (showSkillManager)
         {
             <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
@@ -294,6 +313,7 @@
                     </div>
                 </div>
             </div>
+
         }
     }
 </div>
@@ -321,10 +341,17 @@
     private bool isLoading = true;
     private DiceRoll? lastRoll;
     private bool showSkillManager = false;
+    private List<CharacterDto> partyCharacters = new();
+
+
+    //private List<InventoryItemDto> campaignInventoryItems = new();
+
 
     protected override async Task OnInitializedAsync()
     {
         await LoadCharacter();
+        var campaign = await CampaignService.GetCampaignAsync(character.CampaignId);
+        partyCharacters = campaign?.Characters ?? new();
         EnsureSkillsInitialized();
     }
 

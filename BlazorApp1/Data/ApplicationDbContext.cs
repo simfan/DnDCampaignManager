@@ -19,6 +19,7 @@ namespace BlazorApp1.Data
         public DbSet<ChatRoom> ChatRooms { get; set; }
         public DbSet<ChatRoomMember> ChatRoomMembers { get; set; }
         public DbSet<CampaignMember> CampaignMembers { get; set; }
+        public DbSet<InventoryItem> InventoryItems { get; set; }
         public DbSet<Journal> Journals { get; set; }
         public DbSet<Entry> Entries { get; set; }
         public DbSet<Tag> Tags { get; set;  }
@@ -170,6 +171,21 @@ namespace BlazorApp1.Data
                 .OnDelete(DeleteBehavior.Cascade);
             });
 
+            modelBuilder.Entity<InventoryItem>(entity =>
+            {
+                entity.HasKey(e => e.InventoryItemId);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+
+                entity.HasOne(e => e.Character)
+                    .WithMany()
+                    .HasForeignKey(e => e.CharacterId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Campaign)
+                    .WithMany()
+                    .HasForeignKey(e => e.CampaignId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
 
             modelBuilder.Entity<JournalTag>(entity =>
             {

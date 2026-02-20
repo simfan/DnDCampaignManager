@@ -69,6 +69,11 @@ builder.Services.AddHttpClient<ChatService>(client =>
     client.BaseAddress = new Uri("https://localhost:7282/");
 })
 .AddHttpMessageHandler<CookieHandler>();
+builder.Services.AddHttpClient<InventoryService>(client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7282/");
+})
+.AddHttpMessageHandler<CookieHandler>();
 builder.Services.AddHttpClient<JournalService>(client =>
 { 
     client.BaseAddress = new Uri("https://localhost:7282/");

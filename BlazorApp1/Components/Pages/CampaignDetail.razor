@@ -10,6 +10,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject CampaignService CampaignService
 @inject CharacterService CharacterService
+@inject InventoryService InventoryService
 @inject NavigationManager Navigation
 @attribute [Authorize]
 
@@ -68,6 +69,13 @@
                     Resources
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "inventory" ? "active" : "")"
+                   @onclick='() => activeTab = "inventory"'
+                   style="cursor: pointer;">
+                    <i class="bi bi-bag"></i> Party Chest
+                </a>
+            </li>
         </ul>
 
         @if (activeTab == "characters")
@@ -123,16 +131,23 @@
                 }
             </div>
         }
-        else
-        if (activeTab == "resources")
+        else if (activeTab == "resources")
         {
             <CampaignResources 
-        CampaignId="@CampaignId" 
-        IsDM="@isDM"
-        CurrentUserId="@currentUserId"
-        CampaignMembers="@campaign.Members"
-        CampaignCharacters="@campaign.Characters" />
-    }
+                 CampaignId="@CampaignId" 
+                 IsDM="@isDM"
+                 CurrentUserId="@currentUserId"
+                 CampaignMembers="@campaign.Members"
+                 CampaignCharacters="@campaign.Characters" />
+        }
+        else if (activeTab == "inventory")
+        {
+            <h5>Party Chest</h5>
+            <InventoryPanel CampaignId="@campaign.CampaignId"
+                            PartyCharacters="@campaign.Characters"
+                            OnTransferred="EventCallback.Empty" />
+        }
+
     
 }
 </div>
@@ -173,7 +188,7 @@
     private bool isDM = false;
 
     private bool createJournal = false;
-
+    private InventoryPanel? campaignInventoryPanel;
     protected override async Task OnInitializedAsync()
     {
         await LoadCampaign();
