@@ -110,7 +110,7 @@ namespace BlazorApp1.DTOs
         public int ArmorClass { get; set; }
         public int MaxHitPoints { get; set; }
         public int CurrentHitPoints { get; set; }
-        public List<Skill> Skills { get; set; }
+        public List<Skill> Skills { get; set; } = new();
     }
 
     public class CharacterClassDto

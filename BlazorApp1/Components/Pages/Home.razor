@@ -146,47 +146,40 @@
             <!-- Calendar & Events Section -->
             <div class="col-lg-6">
                 <div class="card">
-                   <!-- <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-calendar-event"></i> Calendar & Events
-                        </h5>
-                        <div>
-                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="PreviousMonth">
-                                <i class="bi bi-chevron-left"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="NextMonth">
-                                <i class="bi bi-chevron-right"></i>
-                            </button>
-                            <button class="btn btn-sm btn-primary" @onclick="ShowAddEventModal">
-                                Add Event
-                            </button>
-                        </div>
-                    </div>-->
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="bi bi-calendar-event"></i> Calendar & Events
                         </h5>
-                        <div class="btn-group">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-download"></i> Export
+                        <div class="d-flex align-items-center gap-1">
+                            <!-- Export Dropdown (Blazor-managed, no Bootstrap JS dependency) -->
+                            <div class="position-relative">
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        @onclick="ToggleExportMenu"
+                                        @onclick:stopPropagation="true">
+                                    <i class="bi bi-download"></i> Export <i class="bi bi-caret-down-fill" style="font-size: 0.65rem;"></i>
+                                </button>
+                                @if (showExportMenu)
+                                {
+                                    <ul class="dropdown-menu show position-absolute" style="right: 0; top: 100%; z-index: 1050; min-width: 180px;">
+                                        <li>
+                                            <a class="dropdown-item" href="#" @onclick="ExportUpcomingEventsAndClose" @onclick:preventDefault>
+                                                <i class="bi bi-calendar-plus"></i> Upcoming Events
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="#" @onclick="ExportAllEventsAndClose" @onclick:preventDefault>
+                                                <i class="bi bi-calendar-check"></i> All Events
+                                            </a>
+                                        </li>
+                                    </ul>
+                                }
+                            </div>
+                            <!-- Navigation Buttons -->
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousMonth" title="Previous month">
+                                <i class="bi bi-arrow-left"></i>Last
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <a class="dropdown-item" href="#" @onclick="ExportUpcomingEvents" @onclick:preventDefault>
-                                        <i class="bi bi-calendar-plus"></i> Upcoming Events
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#" @onclick="ExportAllEvents" @onclick:preventDefault>
-                                        <i class="bi bi-calendar-check"></i> All Events
-                                    </a>
-                                </li>
-                            </ul>
-                            <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousMonth">
-                                <i class="bi bi-chevron-left"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary" @onclick="NextMonth">
-                                <i class="bi bi-chevron-right"></i>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="NextMonth" title="Next month">
+                                <i class="bi bi-arrow-right"></i>Next
                             </button>
                             <button class="btn btn-sm btn-primary" @onclick="ShowAddEventModal">
                                 <i class="bi bi-plus-circle"></i> Add Event
@@ -280,36 +273,38 @@
                     .Take(3)
                     .ToList();
                 }
-                @*if(events != null && events.Count > 0)*@
-                @if(upcomingEvents.Any())
+                @if (upcomingEvents.Any())
                 {
-                    @foreach(var myEvent in upcomingEvents)
+                    @foreach (var myEvent in upcomingEvents)
                     {
                         <div class="card mb-3 border-start border-4 @GetEventBorderColor(myEvent)">
                             <div class="card-body">
-                                <h6 class="d-flex justify-content-between align-items-start mb-2"><strong>@myEvent.EventDate.ToString("MM/dd/yyyy")</strong></h6>
-                        <br/>
-                        <div class="mb-0">@myEvent.Title</div>
-                        <small class="text-muted">
-                        @if(myEvent.CampaignId != null && myEvent.CampaignName != null)
-                        {
-                            <span class="badge bg-primary text-muted"><i class ="bi bi-map"></i>@myEvent.CampaignName</span>
-                            }
-                        </small>
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">
+                                            <strong>@myEvent.EventDate.ToString("MM/dd/yyyy")</strong>
+                                            @if (myEvent.EventDate.Date == DateTime.Today)
+                                            {
+                                                <span class="badge bg-warning text-dark ms-2">Today</span>
+                                            }
+                                            else if (myEvent.EventDate.Date == DateTime.Today.AddDays(1))
+                                            {
+                                                <span class="badge bg-info ms-2">Tomorrow</span>
+                                            }
+                                        </h6>
+                                        <div class="mb-0">@myEvent.Title</div>
+                                        @if (myEvent.CampaignId != null && myEvent.CampaignName != null)
+                                        {
+                                            <span class="badge bg-primary mt-1"><i class="bi bi-map"></i> @myEvent.CampaignName</span>
+                                        }
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary flex-shrink-0 ms-2"
+                                            @onclick="() => ExportSingleEvent(myEvent.PlayerEventId, myEvent.Title, myEvent.EventDate)"
+                                            title="Export to calendar">Export to Calendar
+                                        <i class="bi bi-download"></i>
+                                    </button>
+                                </div>
                             </div>
-                            @if (myEvent.EventDate.Date == DateTime.Today)
-                            {
-                                <span class="badge bg-warning text-dark">Today</span>
-                            }
-                            else if (myEvent.EventDate.Date == DateTime.Today.AddDays(1))
-                            {
-                                <span class="badge bg-info">Tomorrow</span>
-                            }
-                            <button class="btn btn-sm btn-outline-secondary"
-                                    @onclick="() => ExportSingleEvent(myEvent.PlayerEventId, myEvent.Title, myEvent.EventDate)"
-                                    title="Export to calendar">
-                                <i class="bi bi-download"></i>
-                            </button>
                         </div>
                     }
                 }
@@ -442,6 +437,12 @@
     }
 </div>
 
+@* Click-outside overlay to close export dropdown *@
+@if (showExportMenu)
+{
+    <div style="position: fixed; inset: 0; z-index: 1040;" @onclick="CloseExportMenu"></div>
+}
+
 <style>
     .calendar-grid {
         display: grid;
@@ -532,18 +533,7 @@
         }
     }
 </style>
-<!--<script>
-    window.downloadFileFromStream = async (fileName, contentStreamReference) => {
-    const arrayBuffer = await contentStreamReference.arrayBuffer();
-    const blob = new Blob([arrayBuffer]);
-    const url = URL.createObjectURL(blob);
-    const anchorElement = document.createElement('a');
-    anchorElement.href = url;
-    anchorElement.download = fileName ?? '';
-    anchorElement.click();
-    anchorElement.remove();
-    URL.revokeObjectURL(url);
-</script>-->
+
 @code {
     private List<CampaignDto> campaigns = new();
     private List<CharacterDto> characters = new();
@@ -552,9 +542,11 @@
     private int totalLevel = 0;
     private DateTime currentDate = DateTime.Today;
     private DateTime? selectedDate = null;
+    private bool showExportMenu = false;
     private IJSObjectReference? jsModule;
     private HubConnection? rollHubConnection;
     private List<DiceRoll> rollHistory = new();
+
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
@@ -574,7 +566,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if(firstRender)
+        if (firstRender)
         {
             jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/Home.js");
         }
@@ -583,6 +575,16 @@
     private async Task LoadEvents()
     {
         events = await EventService.GetEventsByMonthAsync(currentDate.Year, currentDate.Month);
+    }
+
+    private void ToggleExportMenu()
+    {
+        showExportMenu = !showExportMenu;
+    }
+
+    private void CloseExportMenu()
+    {
+        showExportMenu = false;
     }
 
     private void PreviousMonth()
@@ -669,8 +671,6 @@
 
     private void ShowAddEventModal()
     {
-        // TODO: Implement modal for adding events
-        // For now, just navigate to an events page
         Navigation.NavigateTo("/events/create");
     }
 
@@ -682,6 +682,18 @@
             return "border-info";
         else
             return "border-primary";
+    }
+
+    private async Task ExportUpcomingEventsAndClose()
+    {
+        showExportMenu = false;
+        await ExportUpcomingEvents();
+    }
+
+    private async Task ExportAllEventsAndClose()
+    {
+        showExportMenu = false;
+        await ExportAllEvents();
     }
 
     private async Task ExportSingleEvent(int eventId, string eventTitle, DateTime eventDate)
@@ -699,7 +711,6 @@
         }
         catch (Exception ex)
         {
-            // Handle error - could show a toast notification
             Console.WriteLine($"Error exporting event: {ex.Message}");
         }
     }
@@ -759,6 +770,7 @@
             await jsModule.DisposeAsync();
         }
     }
+
     private async Task ConnectToRollHub()
     {
         rollHubConnection = new HubConnectionBuilder()

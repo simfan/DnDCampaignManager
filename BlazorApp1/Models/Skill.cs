@@ -1,10 +1,17 @@
-﻿namespace BlazorApp1.Models
+﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
+
+namespace BlazorApp1.Models
 {
     public class Skill
     {
+        [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
+        [JsonPropertyName("abilityScore")]
         public string AbilityScore  { get; set;} = string.Empty;
+        [JsonPropertyName("isProficient")]
         public bool IsProficient { get; set; } = false;
+        [JsonPropertyName("hasExpertise")]
         public bool HasExpertise { get; set; } = false;
         
     }

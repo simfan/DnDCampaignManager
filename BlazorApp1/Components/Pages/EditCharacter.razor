@@ -304,8 +304,14 @@
                     MaxHitPoints = originalCharacter.MaxHitPoints,
                     CurrentHitPoints = originalCharacter.CurrentHitPoints,
                     Skills = originalCharacter.Skills?.Count > 0
-                        ? originalCharacter.Skills
-                        : SkillDefinitions.GetAllSkills()
+                        ? originalCharacter.Skills.Select(s => new Skill
+                        {
+                            Name = s.Name,
+                            AbilityScore = s.AbilityScore,
+                            IsProficient = s.IsProficient,
+                            HasExpertise = s.HasExpertise
+                        }).ToList()
+                         : SkillDefinitions.GetAllSkills()
                 };
             }
         }

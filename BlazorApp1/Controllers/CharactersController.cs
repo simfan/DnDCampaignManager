@@ -17,7 +17,10 @@ namespace BlazorApp1.Controllers
     public class CharactersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-
+        private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
         public CharactersController(ApplicationDbContext context)
         {
             _context = context;
@@ -176,7 +179,9 @@ namespace BlazorApp1.Controllers
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            var existingCharacter = await _context.Characters.FindAsync(id);
+            var existingCharacter = await _context.Characters
+                    .Include(c => c.Classes)
+                    .FirstOrDefaultAsync(c => c.CharacterId == id);
             if (existingCharacter == null)
             {
                 return NotFound();
@@ -210,8 +215,9 @@ namespace BlazorApp1.Controllers
 
             if(character.Skills?.Count > 0)
             {
-                existingCharacter.SkillsJson = JsonSerializer.Serialize(character.Skills);
+                existingCharacter.SkillsJson = JsonSerializer.Serialize(character.Skills, _jsonOptions);
             }
+            //existingCharacter.SkillsJson = JsonSerializer.Serialize(character.Skills ?? new List<Skill>());
             _context.CharacterClasses.RemoveRange(existingCharacter.Classes);
             foreach (var classDto in character.Classes)
             {
@@ -275,7 +281,7 @@ namespace BlazorApp1.Controllers
                 try
                 {
                     skills = !string.IsNullOrEmpty(character.SkillsJson)
-                    ? JsonSerializer.Deserialize<List<Skill>>(character.SkillsJson) ?? SkillDefinitions.GetAllSkills()
+                    ? JsonSerializer.Deserialize<List<Skill>>(character.SkillsJson, _jsonOptions) ?? SkillDefinitions.GetAllSkills()
                     : SkillDefinitions.GetAllSkills();
                 }
                 catch
@@ -295,6 +301,7 @@ namespace BlazorApp1.Controllers
                         Name = cc.Name,
                         Level = cc.Level
                     }).ToList(),
+                    Skills = skills,
                     Strength = character.Strength,
                     Dexterity = character.Dexterity,
                     Constitution = character.Constitution,

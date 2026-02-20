@@ -154,7 +154,7 @@ namespace BlazorApp1.Controllers
    );
         }
         //GET: api/PlayerEvents/{id}/export/all
-        [HttpGet("{id}/export/all")]
+        [HttpGet("export/all")]
         public async Task<IActionResult> ExportAllEvents()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -186,7 +186,7 @@ namespace BlazorApp1.Controllers
             );
         }
             //GET: api/PlayerEvents/{id}/export/upcoming
-            [HttpGet("{id}/export/upcoming")]
+            [HttpGet("export/upcoming")]
         public async Task<IActionResult> ExportUpcomingEvents()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);

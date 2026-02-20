@@ -30,6 +30,10 @@ namespace BlazorApp1.Controllers
                 .Where(cm => cm.UserId == userId)
                 .Include(cm => cm.Campaign)
                 .ThenInclude(c => c.CreatedBy)
+                .Include(cm  => cm.Campaign)
+                .ThenInclude(c => c.Members)
+                .Include(cm => cm.Campaign)
+                .ThenInclude(c => c.Characters)
                 .Select(cm => cm.Campaign)
                 .ToListAsync();
 
@@ -58,7 +62,11 @@ namespace BlazorApp1.Controllers
             var campaign = await _context.Campaigns
                 .Include(c => c.CreatedBy)
                 .Include(c => c.Members)
+                .ThenInclude(m => m.User)
                 .Include(c => c.Characters)
+                .ThenInclude(ch => ch.Classes)
+                .Include(c =>c.Characters)
+                .ThenInclude(ch => ch.Player)
                 .FirstOrDefaultAsync(c => c.CampaignId == id);
 
             if(campaign == null)
