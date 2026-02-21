@@ -241,9 +241,9 @@
                         <button class="btn btn-primary" @onclick="EditCharacter">
                             <i class="bi bi-pencil"></i> Edit Character
                         </button>
-                        <button class="btn btn-secondary" @onclick="ToggleSkillProficiency">
+                        <!--<button class="btn btn-secondary" @onclick="ToggleSkillProficiency">
                             <i class="bi bi-clipboard-check"></i> Manage Skills
-                        </button>
+                        </button>-->
                         <button class="btn btn-danger" @onclick="DeleteCharacter">
                             <i class="bi bi-trash"></i> Delete Character
                         </button>
@@ -262,6 +262,7 @@
                             <InventoryPanel CharacterId="@character.CharacterId"
                                             CampaignId="@character.CampaignId"
                                             PartyCharacters="@partyCharacters"
+                                            OnRoll="HandleInventoryRoll"
                                             OnTransferred="EventCallback.Empty" />
                         </div>
                     </div>
@@ -455,5 +456,11 @@
             await CharacterService.DeleteCharacterAsync(CharacterId);
             Navigation.NavigateTo($"/campaigns/{character.CampaignId}");
         }
+    }
+
+    private void HandleInventoryRoll(DiceRoll roll)
+    {
+        lastRoll = roll;
+        StateHasChanged();
     }
 }

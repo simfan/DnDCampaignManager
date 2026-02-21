@@ -7,7 +7,8 @@
 
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
-@inject AntiforgeryStateProvider AntiforgeryStateProvider
+@*inject AntiforgeryStateProvider AntiforgeryStateProvider*@
+
 @inject ResourceService ResourceService
 
 <div class="container mt-4">
@@ -389,6 +390,7 @@
 
         try
         {
+            //var tokenSet =  AntiforgeryStateProvider.GetAntiforgeryToken();
             using var content = new MultipartFormDataContent();
 
             var fileContent = new StreamContent(selectedFile.OpenReadStream(52428800)); // 50MB max
@@ -397,9 +399,17 @@
             content.Add(new StringContent(newResourceName), "Name");
             content.Add(new StringContent(newResourceDescription), "Description");
             content.Add(new StringContent(CampaignId.ToString()), "CampaignId");
-
-            var response = await Http.PostAsync("api/Resources/upload", content);
-
+            /*var request = new HttpRequestMessage(HttpMethod.Post, "api/Resources/upload");
+            request.Headers.Add("RequestVerficationToken", tokenSet?.ToString());
+            request.Content = content;
+            var response = await Http.SendAsync(request);*/
+            var response = await ResourceService.UploadResourceAsync(
+    newResourceName,
+    newResourceDescription,
+    CampaignId,
+    selectedFile!);
+            //var response = await Http.PostAsync("api/Resources/upload", content);
+            //response.Headers.Add("RequestVerificationToken", tokenSet.RequestToken);
             if (response.IsSuccessStatusCode)
             {
                 await LoadResources();

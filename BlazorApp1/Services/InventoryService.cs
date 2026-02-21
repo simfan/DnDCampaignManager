@@ -24,7 +24,7 @@ namespace BlazorApp1.Services
                    ?? new List<InventoryItemDto>();
         }
 
-        public async Task<InventoryItemDto?> CreateItemAsync(CreateInventoryItemDto dto)
+        public async Task<InventoryItemDto?> CreateItemAsync(SaveInventoryItemDto dto)
         {
             var response = await _http.PostAsJsonAsync("api/Inventory", dto);
             if (response.IsSuccessStatusCode)
@@ -32,7 +32,7 @@ namespace BlazorApp1.Services
             return null;
         }
 
-        public async Task<InventoryItemDto?> UpdateItemAsync(int id, UpdateInventoryItemDto dto)
+        public async Task<InventoryItemDto?> UpdateItemAsync(int id, SaveInventoryItemDto dto)
         {
             var response = await _http.PutAsJsonAsync($"api/Inventory/item/{id}", dto);
             if (response.IsSuccessStatusCode)

@@ -1,17 +1,8 @@
 ﻿@using BlazorApp1.DTOs
+@using BlazorApp1.Models
 @using BlazorApp1.Services
 @inject InventoryService InventoryService
-
-@*
-    Usage – character inventory (party chest + all other party members as destinations):
-        <InventoryPanel CharacterId="@character.CharacterId"
-                        CampaignId="@character.CampaignId"
-                        PartyCharacters="@campaign.Characters" />
-
-    Usage – campaign (party chest) inventory (all party members as destinations):
-        <InventoryPanel CampaignId="@campaign.CampaignId"
-                        PartyCharacters="@campaign.Characters" />
-*@
+@inject DiceService DiceService
 
 <div class="inventory-panel">
     @if (isLoading)
@@ -51,21 +42,21 @@
         }
         else
         {
-            @foreach (var group in items.GroupBy(i => i.Category ?? "Miscellaneous").OrderBy(g => g.Key))
+            @foreach (var group in items.GroupBy(i => i.ItemType).OrderBy(g => g.Key))
             {
                 <h6 class="text-muted mt-3 mb-1 border-bottom pb-1">
-                    <i class="bi bi-tag"></i> @group.Key
+                    <i class="bi @ItemTypeIcon(group.Key)"></i> @group.Key
                 </h6>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>Name</th>
-                                <th style="width:60px" class="text-center">Qty</th>
-                                <th style="width:70px" class="text-center">Weight</th>
-                                <th style="width:70px" class="text-center">Value</th>
-                                <th style="width:80px" class="text-center">Equipped</th>
-                                <th style="width:130px"></th>
+                                <th>Details</th>
+                                <th style="width:55px" class="text-center">Qty</th>
+                                <th style="width:65px" class="text-center">Weight</th>
+                                <th style="width:65px" class="text-center">Value</th>
+                                <th style="width:150px"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -74,6 +65,14 @@
                                 <tr>
                                     <td>
                                         <span class="fw-semibold">@item.Name</span>
+                                        @if (item.IsEquipped)
+                                        {
+                                            <span class="badge bg-success ms-1" style="font-size:.65rem;">Equipped</span>
+                                        }
+                                        @if (item.ItemType == ItemType.MagicItem && item.IsAttuned == true)
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">Attuned</span>
+                                        }
                                         @if (!string.IsNullOrEmpty(item.Description))
                                         {
                                             <br />
@@ -81,20 +80,20 @@
                                             <small class="text-muted">@item.Description</small>
                                         }
                                     </td>
+                                    <td><small class="text-muted">@ItemSummary(item)</small></td>
                                     <td class="text-center">@item.Quantity</td>
                                     <td class="text-center">@(item.Weight.HasValue ? $"{item.Weight:F1}" : "–")</td>
                                     <td class="text-center">@(item.Value.HasValue ? $"{item.Value:F1}gp" : "–")</td>
-                                    <td class="text-center">
-                                        @if (item.IsEquipped)
-                                        {
-                                            <span class="badge bg-success">Equipped</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="badge bg-secondary">–</span>
-                                        }
-                                    </td>
                                     <td class="text-end">
+                                        @if (item.ItemType == ItemType.Weapon && CharacterId.HasValue)
+                                        {
+                                            <button class="btn btn-outline-danger btn-sm me-1" title="Roll Attack"
+                                                    @onclick="() => RollWeaponAttack(item)">
+                                                <i class="bi bi-dice-5"></i>
+                                            </button>
+                                            /*<button class "btn btn-outline-danger btn-sm me-1" title=" = "Roll Damage"
+                                            @onclick="() => RollWeaponDamage()"></button>*/
+                                        }
                                         <button class="btn btn-outline-secondary btn-sm me-1" title="Edit"
                                                 @onclick="() => ShowEditModal(item)">
                                             <i class="bi bi-pencil"></i>
@@ -121,59 +120,348 @@
     }
 </div>
 
-@* ── Add / Edit Modal ──────────────────────────────────────────────────── *@
+@* ── Add / Edit Modal ────────────────────────────────────────────────────── *@
 @if (showItemModal)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">@(editingItem == null ? "Add Item" : "Edit Item")</h5>
                     <button type="button" class="btn-close" @onclick="CloseItemModal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Name *</label>
-                        <input class="form-control" @bind="formName" />
+
+                    @* ── Common fields ── *@
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label">Item Type *</label>
+                            <select class="form-select" @bind="form.ItemType">
+                                @foreach (var t in Enum.GetValues<ItemType>())
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label">Name *</label>
+                            <input class="form-control" @bind="form.Name" />
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Category</label>
-                        <select class="form-select" @bind="formCategory">
-                            <option value="">— Select —</option>
-                            <option>Weapon</option>
-                            <option>Armor</option>
-                            <option>Consumable</option>
-                            <option>Tool</option>
-                            <option>Treasure</option>
-                            <option>Magic Item</option>
-                            <option>Miscellaneous</option>
-                        </select>
-                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">Description</label>
-                        <textarea class="form-control" rows="2" @bind="formDescription"></textarea>
+                        <textarea class="form-control" rows="2" @bind="form.Description"></textarea>
                     </div>
+
                     <div class="row g-2 mb-3">
                         <div class="col">
                             <label class="form-label">Quantity</label>
-                            <input type="number" class="form-control" min="1" @bind="formQuantity" />
+                            <input type="number" class="form-control" min="1" @bind="form.Quantity" />
                         </div>
                         <div class="col">
                             <label class="form-label">Weight (lb)</label>
-                            <input type="number" step="0.1" class="form-control" @bind="formWeight" />
+                            <input type="number" step="0.1" class="form-control" @bind="form.Weight" />
                         </div>
                         <div class="col">
                             <label class="form-label">Value (gp)</label>
-                            <input type="number" step="0.01" class="form-control" @bind="formValue" />
+                            <input type="number" step="0.01" class="form-control" @bind="form.Value" />
                         </div>
+                        @if (CharacterId.HasValue)
+                        {
+                            <div class="col-auto d-flex align-items-end">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" @bind="form.IsEquipped" />
+                                    <label class="form-check-label">Equipped</label>
+                                </div>
+                            </div>
+                        }
                     </div>
-                    @if (CharacterId.HasValue)
+
+                    <hr />
+
+                    @* ── Weapon fields ── *@
+                    @if (form.ItemType == ItemType.Weapon)
                     {
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" @bind="formIsEquipped" />
-                            <label class="form-check-label">Equipped</label>
+                        <h6>Weapon Properties</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Attack Type</label>
+                                <select class="form-select" @bind="form.AttackType">
+                                    @foreach (var v in Enum.GetValues<WeaponAttackType>())
+                                    {
+                                        <option value="@v">@v</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Ability Used</label>
+                                <select class="form-select" @bind="form.AbilityUsed">
+                                    <option value="@WeaponAbility.STR">STR</option>
+                                    <option value="@WeaponAbility.DEX">DEX</option>
+                                    <option value="@WeaponAbility.STRorDEX">STR or DEX (Finesse)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Damage Type</label>
+                                <select class="form-select" @bind="form.DamageType">
+                                    @foreach (var v in Enum.GetValues<DamageType>())
+                                    {
+                                        <option value="@v">@v</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-3">
+                                <label class="form-label">Damage Dice</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" min="1" @bind="form.DamageDiceCount" placeholder="1" />
+                                    <span class="input-group-text">d</span>
+                                    <select class="form-select" @bind="form.DamageDiceSides">
+                                        @foreach (var s in new[] { 4, 6, 8, 10, 12, 20 })
+                                        {
+                                            <option value="@s">@s</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-2">
+                                <label class="form-label">Bonus</label>
+                                <input type="number" class="form-control" @bind="form.DamageBonus" />
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label">Versatile Dice</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" min="1" @bind="form.VersatileDiceCount" placeholder="–" />
+                                    <span class="input-group-text">d</span>
+                                    <select class="form-select" @bind="form.VersatileDiceSides">
+                                        <option value="">–</option>
+                                        @foreach (var s in new[] { 4, 6, 8, 10, 12, 20 })
+                                        {
+                                            <option value="@s">@s</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-2">
+                                <label class="form-label">Reach (ft)</label>
+                                <input type="number" class="form-control" @bind="form.ReachFt" />
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-3">
+                                <label class="form-label">Range Normal (ft)</label>
+                                <input type="number" class="form-control" @bind="form.RangeNormalFt" placeholder="–" />
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label">Range Long (ft)</label>
+                                <input type="number" class="form-control" @bind="form.RangeLongFt" placeholder="–" />
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-2">
+                            <div class="col-auto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="form.IsTwoHanded" />
+                                    <label class="form-check-label">Two-Handed</label>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="form.IsLight" />
+                                    <label class="form-check-label">Light</label>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="form.IsThrown" />
+                                    <label class="form-check-label">Thrown</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Additional Properties</label>
+                            <input class="form-control" @bind="form.Properties" placeholder="e.g. Loading, Special, Silvered" />
                         </div>
                     }
+
+                    @* ── Armor fields ── *@
+                    @if (form.ItemType == ItemType.Armor)
+                    {
+                        <h6>Armor Properties</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-3">
+                                <label class="form-label">Armor Type</label>
+                                <select class="form-select" @bind="form.ArmorType">
+                                    @foreach (var v in Enum.GetValues<ArmorType>())
+                                    {
+                                        <option value="@v">@v</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Base AC</label>
+                                <input type="number" class="form-control" @bind="form.BaseArmorClass" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">AC Bonus</label>
+                                <input type="number" class="form-control" @bind="form.ArmorClassBonus" placeholder="0" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Max DEX Bonus</label>
+                                <input type="number" class="form-control" @bind="form.MaxDexBonus" placeholder="Unlimited" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">STR Requirement</label>
+                                <input type="number" class="form-control" @bind="form.StrengthRequirement" placeholder="–" />
+                            </div>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="form.StealthDisadvantage" />
+                            <label class="form-check-label">Stealth Disadvantage</label>
+                        </div>
+                    }
+
+                    @* ── Magic Item fields ── *@
+                    @if (form.ItemType == ItemType.MagicItem)
+                    {
+                        <h6>Magic Item Properties</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Rarity</label>
+                                <select class="form-select" @bind="form.Rarity">
+                                    @foreach (var v in Enum.GetValues<ItemRarity>())
+                                    {
+                                        <option value="@v">@v</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Max Charges</label>
+                                <input type="number" class="form-control" @bind="form.MaxCharges" placeholder="–" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Current Charges</label>
+                                <input type="number" class="form-control" @bind="form.CurrentCharges" placeholder="–" />
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-auto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="form.RequiresAttunement" />
+                                    <label class="form-check-label">Requires Attunement</label>
+                                </div>
+                            </div>
+                            @if (form.RequiresAttunement == true)
+                            {
+                                <div class="col-auto">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" @bind="form.IsAttuned" />
+                                        <label class="form-check-label">Currently Attuned</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Effect</label>
+                            <textarea class="form-control" rows="2" @bind="form.Effect"></textarea>
+                        </div>
+                    }
+
+                    @* ── Potion fields ── *@
+                    @if (form.ItemType == ItemType.Potion)
+                    {
+                        <h6>Potion Properties</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Effect</label>
+                                <input class="form-control" @bind="form.Effect" placeholder="e.g. Restores HP, grants darkvision" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Duration</label>
+                                <input class="form-control" @bind="form.Duration" placeholder="e.g. 1 hour, Instantaneous" />
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-auto">
+                                <label class="form-label">Healing Dice</label>
+                                <div class="input-group" style="width:180px">
+                                    <input type="number" class="form-control" min="1" @bind="form.HealDiceCount" placeholder="–" />
+                                    <span class="input-group-text">d</span>
+                                    <select class="form-select" @bind="form.HealDiceSides">
+                                        <option value="">–</option>
+                                        @foreach (var s in new[] { 4, 6, 8, 10, 12 })
+                                        {
+                                            <option value="@s">@s</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <label class="form-label">Heal Bonus</label>
+                                <input type="number" class="form-control" style="width:90px" @bind="form.HealBonus" placeholder="0" />
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Ammunition fields ── *@
+                    @if (form.ItemType == ItemType.Ammunition)
+                    {
+                        <h6>Ammunition Properties</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Ammunition Type</label>
+                                <input class="form-control" @bind="form.AmmunitionType" placeholder="e.g. Arrow, Bolt, Bullet" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Damage Bonus Override</label>
+                                <input type="number" class="form-control" @bind="form.DamageBonusOverride" placeholder="e.g. +1" />
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Tool fields ── *@
+                    @if (form.ItemType == ItemType.Tool)
+                    {
+                        <h6>Tool Properties</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-5">
+                                <label class="form-label">Tool Type</label>
+                                <input class="form-control" @bind="form.ToolType" placeholder="e.g. Thieves' Tools, Smith's Tools" />
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">Associated Skill</label>
+                                <input class="form-control" @bind="form.AssociatedSkill" placeholder="e.g. Stealth, Perception" />
+                            </div>
+                            <div class="col-auto d-flex align-items-end">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" @bind="form.HasProficiency" />
+                                    <label class="form-check-label">Proficient</label>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Mount fields ── *@
+                    @if (form.ItemType == ItemType.Mount)
+                    {
+                        <h6>Mount / Vehicle Properties</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Mount Type</label>
+                                <input class="form-control" @bind="form.MountType" placeholder="e.g. Warhorse, Rowboat" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Speed (ft)</label>
+                                <input type="number" class="form-control" @bind="form.SpeedFt" />
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label">Carrying Capacity</label>
+                                <input class="form-control" @bind="form.CarryingCapacity" placeholder="e.g. 480 lb" />
+                            </div>
+                        </div>
+                    }
+
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="CloseItemModal">Cancel</button>
@@ -190,7 +478,7 @@
     </div>
 }
 
-@* ── Transfer Modal ────────────────────────────────────────────────────── *@
+@* ── Transfer Modal ────────────────────────────────────────────────────────── *@
 @if (showTransferModal && transferItem != null)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
@@ -241,22 +529,19 @@
 @code {
     // ── Parameters ────────────────────────────────────────────────────────────
 
-    /// <summary>Set when showing a character's personal inventory.</summary>
     [Parameter] public int? CharacterId { get; set; }
-
-    /// <summary>Always required. The campaign this inventory belongs to.</summary>
     [Parameter] public int? CampaignId { get; set; }
-
-    /// <summary>
-    /// All characters in the party. Used to build transfer destinations.
-    /// The current character (CharacterId) is automatically excluded from the list.
-    /// </summary>
     [Parameter] public List<CharacterDto> PartyCharacters { get; set; } = new();
 
-    /// <summary>Raised after a successful transfer so the parent can refresh if needed.</summary>
+    /// <summary>
+    /// Fired when a weapon attack or damage roll is made, so the parent page
+    /// can display the result in its "Last Roll" card.
+    /// </summary>
+    [Parameter] public EventCallback<DiceRoll> OnRoll { get; set; }
+
     [Parameter] public EventCallback OnTransferred { get; set; }
 
-    // ── Transfer destination helpers ──────────────────────────────────────────
+    // ── Transfer destinations ─────────────────────────────────────────────────
 
     private record TransferDestination(string Key, string Label, int? ToCharacterId, int? ToCampaignId);
 
@@ -265,15 +550,10 @@
         get
         {
             var list = new List<TransferDestination>();
-
-            // Party chest — only show when we're on a character's inventory
             if (CharacterId.HasValue && CampaignId.HasValue)
                 list.Add(new("campaign", "Party Chest", null, CampaignId));
-
-            // All other party members
             foreach (var c in PartyCharacters.Where(c => c.CharacterId != CharacterId))
                 list.Add(new($"char_{c.CharacterId}", $"{c.Name} ({c.PlayerName})", c.CharacterId, null));
-
             return list;
         }
     }
@@ -285,16 +565,10 @@
     private bool isSaving = false;
     private string? errorMessage;
 
-    // Item modal
+    // Item modal — single flat form object mirrors SaveInventoryItemDto
     private bool showItemModal = false;
     private InventoryItemDto? editingItem;
-    private string formName = "";
-    private string? formCategory;
-    private string? formDescription;
-    private int formQuantity = 1;
-    private decimal? formWeight;
-    private decimal? formValue;
-    private bool formIsEquipped = false;
+    private SaveInventoryItemDto form = new();
 
     // Transfer modal
     private bool showTransferModal = false;
@@ -304,10 +578,7 @@
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    protected override async Task OnParametersSetAsync()
-    {
-        await LoadItems();
-    }
+    protected override async Task OnParametersSetAsync() => await LoadItems();
 
     public async Task LoadItems()
     {
@@ -319,10 +590,7 @@
             else if (CampaignId.HasValue)
                 items = await InventoryService.GetCampaignInventoryAsync(CampaignId.Value);
         }
-        finally
-        {
-            isLoading = false;
-        }
+        finally { isLoading = false; }
     }
 
     // ── Add / Edit ────────────────────────────────────────────────────────────
@@ -330,26 +598,70 @@
     private void ShowAddModal()
     {
         editingItem = null;
-        formName = "";
-        formCategory = null;
-        formDescription = null;
-        formQuantity = 1;
-        formWeight = null;
-        formValue = null;
-        formIsEquipped = false;
+        form = new SaveInventoryItemDto { Quantity = 1, DamageDiceCount = 1, DamageDiceSides = 6, ReachFt = 5, BaseArmorClass = 10 };
         showItemModal = true;
     }
 
     private void ShowEditModal(InventoryItemDto item)
     {
         editingItem = item;
-        formName = item.Name;
-        formCategory = item.Category;
-        formDescription = item.Description;
-        formQuantity = item.Quantity;
-        formWeight = item.Weight;
-        formValue = item.Value;
-        formIsEquipped = item.IsEquipped;
+        form = new SaveInventoryItemDto
+        {
+            ItemType = item.ItemType,
+            Name = item.Name,
+            Description = item.Description,
+            Category = item.Category,
+            Quantity = item.Quantity,
+            Weight = item.Weight,
+            Value = item.Value,
+            IsEquipped = item.IsEquipped,
+            // Weapon
+            AttackType = item.AttackType,
+            AbilityUsed = item.AbilityUsed,
+            DamageDiceCount = item.DamageDiceCount ?? 1,
+            DamageDiceSides = item.DamageDiceSides ?? 6,
+            DamageBonus = item.DamageBonus ?? 0,
+            DamageType = item.DamageType,
+            VersatileDiceCount = item.VersatileDiceCount,
+            VersatileDiceSides = item.VersatileDiceSides,
+            ReachFt = item.ReachFt ?? 5,
+            RangeNormalFt = item.RangeNormalFt,
+            RangeLongFt = item.RangeLongFt,
+            IsTwoHanded = item.IsTwoHanded,
+            IsLight = item.IsLight,
+            IsThrown = item.IsThrown,
+            Properties = item.Properties,
+            // Armor
+            ArmorType = item.ArmorType,
+            BaseArmorClass = item.BaseArmorClass ?? 10,
+            MaxDexBonus = item.MaxDexBonus,
+            StrengthRequirement = item.StrengthRequirement,
+            StealthDisadvantage = item.StealthDisadvantage,
+            ArmorClassBonus = item.ArmorClassBonus ?? 0,
+            // Magic
+            Rarity = item.Rarity,
+            RequiresAttunement = item.RequiresAttunement,
+            IsAttuned = item.IsAttuned,
+            MaxCharges = item.MaxCharges,
+            CurrentCharges = item.CurrentCharges,
+            Effect = item.Effect,
+            // Potion
+            Duration = item.Duration,
+            HealDiceCount = item.HealDiceCount,
+            HealDiceSides = item.HealDiceSides,
+            HealBonus = item.HealBonus,
+            // Ammo
+            AmmunitionType = item.AmmunitionType,
+            DamageBonusOverride = item.DamageBonusOverride,
+            // Tool
+            ToolType = item.ToolType,
+            HasProficiency = item.HasProficiency,
+            AssociatedSkill = item.AssociatedSkill,
+            // Mount
+            SpeedFt = item.SpeedFt,
+            CarryingCapacity = item.CarryingCapacity,
+            MountType = item.MountType
+        };
         showItemModal = true;
     }
 
@@ -357,7 +669,7 @@
 
     private async Task SaveItem()
     {
-        if (string.IsNullOrWhiteSpace(formName)) return;
+        if (string.IsNullOrWhiteSpace(form.Name)) return;
 
         isSaving = true;
         errorMessage = null;
@@ -365,34 +677,14 @@
         {
             if (editingItem == null)
             {
-                var dto = new CreateInventoryItemDto
-                {
-                    Name = formName,
-                    Category = formCategory,
-                    Description = formDescription,
-                    Quantity = formQuantity,
-                    Weight = formWeight,
-                    Value = formValue,
-                    IsEquipped = formIsEquipped,
-                    CharacterId = CharacterId,
-                    CampaignId = CharacterId == null ? CampaignId : null
-                };
-                var created = await InventoryService.CreateItemAsync(dto);
+                form.CharacterId = CharacterId;
+                form.CampaignId = CharacterId == null ? CampaignId : null;
+                var created = await InventoryService.CreateItemAsync(form);
                 if (created != null) items.Add(created);
             }
             else
             {
-                var dto = new UpdateInventoryItemDto
-                {
-                    Name = formName,
-                    Category = formCategory,
-                    Description = formDescription,
-                    Quantity = formQuantity,
-                    Weight = formWeight,
-                    Value = formValue,
-                    IsEquipped = formIsEquipped
-                };
-                var updated = await InventoryService.UpdateItemAsync(editingItem.InventoryItemId, dto);
+                var updated = await InventoryService.UpdateItemAsync(editingItem.InventoryItemId, form);
                 if (updated != null)
                 {
                     var idx = items.FindIndex(i => i.InventoryItemId == updated.InventoryItemId);
@@ -401,14 +693,8 @@
             }
             CloseItemModal();
         }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error saving item: {ex.Message}";
-        }
-        finally
-        {
-            isSaving = false;
-        }
+        catch (Exception ex) { errorMessage = $"Error saving item: {ex.Message}"; }
+        finally { isSaving = false; }
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────
@@ -417,11 +703,69 @@
     {
         errorMessage = null;
         var success = await InventoryService.DeleteItemAsync(item.InventoryItemId);
-        if (success)
-            items.Remove(item);
-        else
-            errorMessage = "Failed to delete item.";
+        if (success) items.Remove(item);
+        else errorMessage = "Failed to delete item.";
     }
+
+    // ── Weapon rolls ──────────────────────────────────────────────────────────
+
+    private async Task RollWeaponAttack(InventoryItemDto weapon)
+    {
+        if (character == null) return;
+
+        // Resolve ability modifier
+        var ability = weapon.AbilityUsed ?? WeaponAbility.STR;
+        int abilityScore = ability == WeaponAbility.DEX
+            ? character.Dexterity
+            : ability == WeaponAbility.STRorDEX
+                ? Math.Max(character.Strength, character.Dexterity)
+                : character.Strength;
+
+        int abilityMod = (abilityScore - 10) / 2;
+        int profBonus = character.GetProficiencyBonus();
+        int attackMod = abilityMod + profBonus + (weapon.DamageBonus ?? 0);
+
+        // Attack roll (d20)
+        var attackRoll = DiceService.AttackRoll(attackMod);
+        attackRoll.RollType = $"Attack – {weapon.Name}";
+        await OnRoll.InvokeAsync(attackRoll);
+
+        // Damage roll
+        var diceType = (weapon.DamageDiceSides ?? 6) switch
+        {
+            4 => DiceType.D4,
+            8 => DiceType.D8,
+            10 => DiceType.D10,
+            12 => DiceType.D12,
+            20 => DiceType.D20,
+            _ => DiceType.D6
+        };
+        int dmgMod = abilityMod + (weapon.DamageBonus ?? 0);
+        var dmgRoll = DiceService.DamageRoll(weapon.DamageDiceCount ?? 1, diceType, dmgMod);
+        dmgRoll.RollType = $"Damage – {weapon.Name} ({weapon.DamageType})";
+        await OnRoll.InvokeAsync(dmgRoll);
+    }
+
+    /*private async Task RollWeaponDamage(InventoryItemDto weapon)
+    {
+        if (character == null) return;
+
+        // Resolve ability modifier
+        var ability = weapon.AbilityUsed ?? WeaponAbility.STR;
+        int abilityScore = ability == WeaponAbility.DEX
+            ? character.Dexterity
+            : ability == WeaponAbility.STRorDEX
+                ? Math.Max(character.Strength, character.Dexterity)
+                : character.Strength;
+
+        int abilityMod = (abilityScore - 10) / 2;
+        int profBonus = character.GetProficiencyBonus();
+        int attackMod = abilityMod + profBonus + (weapon.DamageBonus ?? 0);
+
+    }
+    */
+    // The panel needs the character to compute modifiers. Lazy-loaded from PartyCharacters or CharacterId.
+    private CharacterDto? character => PartyCharacters.FirstOrDefault(c => c.CharacterId == CharacterId);
 
     // ── Transfer ──────────────────────────────────────────────────────────────
 
@@ -429,10 +773,7 @@
     {
         transferItem = item;
         transferQuantity = item.Quantity;
-        // Auto-select if there's only one possible destination
-        selectedDestinationKey = TransferDestinations.Count == 1
-            ? TransferDestinations[0].Key
-            : "";
+        selectedDestinationKey = TransferDestinations.Count == 1 ? TransferDestinations[0].Key : "";
         showTransferModal = true;
     }
 
@@ -464,14 +805,36 @@
                 CloseTransferModal();
                 await OnTransferred.InvokeAsync();
             }
-            else
-            {
-                errorMessage = "Transfer failed.";
-            }
+            else errorMessage = "Transfer failed.";
         }
-        finally
-        {
-            isSaving = false;
-        }
+        finally { isSaving = false; }
     }
+
+    // ── Display helpers ───────────────────────────────────────────────────────
+
+    private static string ItemTypeIcon(ItemType t) => t switch
+    {
+        ItemType.Weapon => "bi-sword",
+        ItemType.Armor => "bi-shield-fill",
+        ItemType.MagicItem => "bi-stars",
+        ItemType.Potion => "bi-capsule",
+        ItemType.Ammunition => "bi-dot",
+        ItemType.Tool => "bi-tools",
+        ItemType.Mount => "bi-star",
+        _ => "bi-bag"
+    };
+
+    private static string ItemSummary(InventoryItemDto i) => i.ItemType switch
+    {
+        ItemType.Weapon => $"{i.AttackType} · {i.DamageDiceCount}d{i.DamageDiceSides}{(i.DamageBonus > 0 ? $"+{i.DamageBonus}" : i.DamageBonus < 0 ? $"{i.DamageBonus}" : "")} {i.DamageType}"
+            + (i.VersatileDiceCount.HasValue ? $" / {i.VersatileDiceCount}d{i.VersatileDiceSides} versatile" : ""),
+        ItemType.Armor => $"{i.ArmorType} · AC {i.BaseArmorClass}{(i.ArmorClassBonus > 0 ? $"+{i.ArmorClassBonus}" : "")}{(i.MaxDexBonus.HasValue ? $" (DEX cap +{i.MaxDexBonus})" : "")}"
+            + (i.StealthDisadvantage == true ? " · Stealth disadv." : ""),
+        ItemType.MagicItem => $"{i.Rarity}{(i.RequiresAttunement == true ? " · Attunement" : "")}{(i.MaxCharges.HasValue ? $" · {i.CurrentCharges}/{i.MaxCharges} charges" : "")}",
+        ItemType.Potion => $"{i.Effect}{(i.HealDiceCount.HasValue ? $" · Heal {i.HealDiceCount}d{i.HealDiceSides}{(i.HealBonus > 0 ? $"+{i.HealBonus}" : "")}" : "")}",
+        ItemType.Ammunition => $"{i.AmmunitionType}{(i.DamageBonusOverride.HasValue ? $" (+{i.DamageBonusOverride})" : "")}",
+        ItemType.Tool => $"{i.ToolType}{(i.HasProficiency == true ? " · Proficient" : "")}",
+        ItemType.Mount => $"{i.MountType}{(i.SpeedFt.HasValue ? $" · {i.SpeedFt}ft" : "")}",
+        _ => i.Category ?? ""
+    };
 }

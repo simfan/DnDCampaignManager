@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -95,7 +96,10 @@ builder.Services.AddHttpClient<ResourceService>(client =>
 
 
 builder.Services.AddControllers();
-
+/*builder.Services.AddAntiforgery(options =>
+{
+    options.SuppressXFrameOptionsHeader = true;
+});*/
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = IdentityConstants.ApplicationScheme;
@@ -128,6 +132,7 @@ builder.Services
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
 builder.Services.AddSignalR();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("StreamDeckLocal", policy =>
@@ -163,7 +168,12 @@ app.UseCors("StreamDeckLocal");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseAntiforgery();
+//app.UseAntiforgery();
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api")
+    && !context.Request.Path.StartsWithSegments("/resourcehub"),
+    appBuilder => appBuilder.UseAntiforgery()
+);
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -172,5 +182,6 @@ app.MapAdditionalIdentityEndpoints();
 app.MapControllers();
 app.MapHub<ChatHub>("/chathub");
 app.MapHub<RollHub>("/rollhub");
+app.MapHub<ResourceHub>("/resourcehub");
 
 app.Run();

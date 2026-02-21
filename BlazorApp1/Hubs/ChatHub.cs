@@ -4,7 +4,7 @@ using System.Security.Claims;
 
 namespace BlazorApp1.Hubs
 {
-    [Authorize]
+    /*[Authorize]*/
     public class ChatHub : Hub
     {
         public async Task JoinChatRoom(string chatRoomId)

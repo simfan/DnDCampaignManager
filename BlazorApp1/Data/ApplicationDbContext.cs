@@ -176,6 +176,17 @@ namespace BlazorApp1.Data
                 entity.HasKey(e => e.InventoryItemId);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
 
+                // TPH discriminator
+                entity.HasDiscriminator<ItemType>("ItemType")
+                    .HasValue<InventoryItem>(ItemType.Generic)
+                    .HasValue<WeaponItem>(ItemType.Weapon)
+                    .HasValue<ArmorItem>(ItemType.Armor)
+                    .HasValue<MagicItem>(ItemType.MagicItem)
+                    .HasValue<PotionItem>(ItemType.Potion)
+                    .HasValue<AmmunitionItem>(ItemType.Ammunition)
+                    .HasValue<ToolItem>(ItemType.Tool)
+                    .HasValue<MountItem>(ItemType.Mount);
+
                 entity.HasOne(e => e.Character)
                     .WithMany()
                     .HasForeignKey(e => e.CharacterId)

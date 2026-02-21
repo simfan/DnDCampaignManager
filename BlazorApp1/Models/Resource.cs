@@ -38,6 +38,10 @@ namespace BlazorApp1.Models
         Image = 2,
         Document = 3,
         Audio = 4,
+        PDF = 5,
+        Spreadsheet = 6,
+        Video = 7,
         Other = 99
     }
 }
+

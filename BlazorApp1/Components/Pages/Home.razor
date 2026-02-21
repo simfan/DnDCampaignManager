@@ -8,6 +8,7 @@
 @using BlazorApp1.Services
 @inject CampaignService CampaignService
 @inject CharacterService CharacterService
+@inject ResourceService ResourceService
 @inject IJSRuntime JS
 @inject PlayerEventService EventService
 @inject NavigationManager Navigation
@@ -383,21 +384,103 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="bi bi-book"></i> Shared Resources
+                            @if (newResourceCount > 0)
+                            {
+                                <span class="badge bg-danger ms-2">@newResourceCount new</span>
+                            }
                         </h5>
-                        <button class="btn btn-sm btn-outline-secondary" disabled>
-                            Coming Soon
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="text-center text-muted py-4">
-                            <i class="bi bi-book" style="font-size: 3rem;"></i>
-                            <p class="mt-2">Shared resources feature coming soon!</p>
-                            <small>This will include rulebooks, house rules, maps, and other shared campaign materials.</small>
+                        <div class="d-flex align-items-center gap-2">
+                            @if (sharedResources.Count > 0)
+                            {
+                                <small class="text-muted">@sharedResources.Count resource(s)</small>
+                            }
+                            <span class="badge @(resourceHubConnected ? "bg-success" : "bg-secondary")" style="font-size:0.65rem;">
+                                @(resourceHubConnected ? "Live" : "Offline")
+                            </span>
                         </div>
+                    </div>
+
+                    <div class="card-body p-0">
+                        @if (resourcesLoading)
+                        {
+                            <div class="text-center py-4">
+                                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                                <span class="ms-2 text-muted small">Loading resources…</span>
+                            </div>
+                        }
+                        else if (sharedResources.Count == 0)
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-book" style="font-size:2.5rem;"></i>
+                                <p class="mt-2 mb-0">No resources shared with you yet.</p>
+                                <small>Resources shared by your DM will appear here instantly.</small>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var res in sharedResources.Take(sharedResourcesExpanded ? sharedResources.Count : 5))
+                                {
+                                    <div class="list-group-item @(res.IsNew ? "list-group-item-warning" : "")"
+                                         style="transition: background-color 2s ease;">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="d-flex align-items-center gap-2 flex-grow-1">
+                                                <i class="bi @GetResourceIcon(res.Type) fs-5 text-secondary"></i>
+                                                <div>
+                                                    <div class="fw-semibold">@res.Name</div>
+                                                    @if (!string.IsNullOrWhiteSpace(res.Description))
+                                                    {
+                                                        <div class="text-muted small">@res.Description</div>
+                                                    }
+                                                    <div class="text-muted" style="font-size:0.7rem;">
+                                                        <i class="bi bi-building"></i> @res.CampaignName
+                                                        &nbsp;·&nbsp;
+                                                        <i class="bi bi-person"></i> @res.UploadedByName
+                                                        &nbsp;·&nbsp;
+                                                        <i class="bi bi-calendar"></i> @res.CreatedDate.ToLocalTime().ToString("MMM d")
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-1 ms-2 flex-shrink-0">
+                                                @if (res.Type == "Image")
+                                                {
+                                                    <a href="/api/Resources/file/@res.ResourceId"
+                                                       class="btn btn-sm btn-outline-info" target="_blank" title="View">
+                                                        <i class="bi bi-eye"></i>
+                                                    </a>
+                                                }
+                                                <a href="/api/Resources/file/@res.ResourceId"
+                                                   class="btn btn-sm btn-outline-secondary" download title="Download">
+                                                    <i class="bi bi-download"></i>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (sharedResources.Count > 5)
+                            {
+                                <div class="text-center p-2 border-top">
+                                    <button class="btn btn-link btn-sm text-decoration-none"
+                                            @onclick="() => sharedResourcesExpanded = !sharedResourcesExpanded">
+                                        @if (sharedResourcesExpanded)
+                                        {
+                                            <span><i class="bi bi-chevron-up"></i> Show fewer</span>
+                                        }
+                                        else
+                                        {
+                                            <span><i class="bi bi-chevron-down"></i> Show all @sharedResources.Count resources</span>
+                                        }
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
                     </div>
                 </div>
             </div>
-        </div>
+
 
         <!-- Quick Stats Section -->
         <div class="row g-4 mt-2">
@@ -547,6 +630,18 @@
     private HubConnection? rollHubConnection;
     private List<DiceRoll> rollHistory = new();
 
+    // ── Shared Resources state ────────────────────────────────────────────────
+    private List<SharedResourceViewModel> sharedResources = new();
+    private HubConnection? resourceHubConnection;
+    private bool resourceHubConnected = false;
+    private bool resourcesLoading = true;
+    private bool sharedResourcesExpanded = false;
+    private int newResourceCount = 0;
+    private class SharedResourceViewModel : ResourceDto
+    {
+        public bool IsNew{ get; set; }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
@@ -557,6 +652,8 @@
             characters = await CharacterService.GetCharactersAsync();
             totalLevel = characters.Sum(c => c.TotalLevel);
             await LoadEvents();
+            await LoadSharedResources();
+            await ConnectToResourceHub();
         }
         finally
         {
@@ -576,6 +673,157 @@
     {
         events = await EventService.GetEventsByMonthAsync(currentDate.Year, currentDate.Month);
     }
+    private async Task LoadSharedResources()
+    {
+        resourcesLoading = true;
+        try
+        {
+            var all = new List<ResourceDto>();
+            foreach (var campaign in campaigns)
+            {
+                try
+                {
+                    var res = await ResourceService.GetCampaignResourcesAsync(campaign.CampaignId);
+                    if (res != null) all.AddRange(res);
+                }
+                catch { /* skip campaigns that error */ }
+            }
+
+            sharedResources = all
+            .OrderByDescending(r => r.CreatedDate)
+            .Select(r => new SharedResourceViewModel
+            {
+                ResourceId = r.ResourceId,
+                Name = r.Name,
+                Description = r.Description,
+                Type = r.Type,
+                FileName = r.FileName,
+                ContentType = r.ContentType,
+                FileSize = r.FileSize,
+                CampaignId = r.CampaignId,
+                CampaignName = r.CampaignName,
+                UploadedById = r.UploadedById,
+                UploadedByName = r.UploadedByName,
+                CreatedDate = r.CreatedDate,
+                LastModifiedDate = r.LastModifiedDate,
+                Shares = r.Shares,
+                IsNew = false
+            })
+            .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading shared resources: {ex.Message}");
+        }
+        finally
+        {
+            resourcesLoading = false;
+        }
+    }
+
+    // ── Connect to ResourceHub ────────────────────────────────────────────────
+    private async Task ConnectToResourceHub()
+    {
+        try
+        {
+            resourceHubConnection = new HubConnectionBuilder()
+               .WithUrl(Navigation.ToAbsoluteUri("/resourcehub"), options =>
+    {
+        options.UseDefaultCredentials = true;
+        options.HttpMessageHandlerFactory = _ => new HttpClientHandler
+        {
+            UseCookies = false,
+            UseDefaultCredentials = true
+        };
+    })
+            .WithAutomaticReconnect()
+            .Build();
+
+            // Real-time: a resource was just shared into one of our campaigns
+            resourceHubConnection.On<ResourceDto>("ResourceShared", async (dto) =>
+            {
+                await InvokeAsync(() =>
+        {
+            // Avoid duplicates (re-share of same resource)
+            sharedResources.RemoveAll(r => r.ResourceId == dto.ResourceId);
+
+            var vm = new SharedResourceViewModel
+                {
+                    ResourceId = dto.ResourceId,
+                    Name = dto.Name,
+                    Description = dto.Description,
+                    Type = dto.Type,
+                    FileName = dto.FileName,
+                    ContentType = dto.ContentType,
+                    FileSize = dto.FileSize,
+                    CampaignId = dto.CampaignId,
+                    CampaignName = dto.CampaignName,
+                    UploadedById = dto.UploadedById,
+                    UploadedByName = dto.UploadedByName,
+                    CreatedDate = dto.CreatedDate,
+                    LastModifiedDate = dto.LastModifiedDate,
+                    Shares = dto.Shares,
+                    IsNew = true
+                };
+
+            sharedResources.Insert(0, vm);
+            newResourceCount++;
+            StateHasChanged();
+
+            // Fade the highlight out after 5 seconds
+            _ = Task.Delay(5000).ContinueWith(_ =>
+        {
+            vm.IsNew = false;
+            if (newResourceCount > 0) newResourceCount--;
+            InvokeAsync(StateHasChanged);
+        });
+        });
+            });
+
+            resourceHubConnection.Reconnected += async _ =>
+            {
+                resourceHubConnected = true;
+                await JoinResourceHubGroups();
+                await InvokeAsync(StateHasChanged);
+            };
+
+            resourceHubConnection.Reconnecting += _ =>
+            {
+                resourceHubConnected = false;
+                return InvokeAsync(StateHasChanged);
+            };
+
+            await resourceHubConnection.StartAsync();
+            resourceHubConnected = true;
+            await JoinResourceHubGroups();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ResourceHub connection error: {ex.Message}");
+            Console.WriteLine($"ResourceHub inner excpetion: {ex.InnerException?.Message}");
+        }
+    }
+
+    private async Task JoinResourceHubGroups()
+    {
+        if (resourceHubConnection?.State != HubConnectionState.Connected) return;
+        foreach (var campaign in campaigns)
+        {
+            await resourceHubConnection.SendAsync("JoinCampaign", campaign.CampaignId.ToString());
+        }
+    }
+
+    // ── Icon helper ──────────────────────────────────────────────────────────
+    private static string GetResourceIcon(string? type) => type switch
+    {
+        "Image" => "bi-image",
+        "PDF" => "bi-file-earmark-pdf text-danger",
+        "Document" => "bi-file-earmark-word text-primary",
+        "Spreadsheet" => "bi-file-earmark-excel text-success",
+        "Video" => "bi-camera-video",
+        "Audio" => "bi-music-note-beamed",
+        _ => "bi-file-earmark"
+    };
 
     private void ToggleExportMenu()
     {
