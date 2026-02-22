@@ -1,0 +1,741 @@
+@page "/campaigns/{CampaignId:int}/dm"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using BlazorApp1.DTOs
+@using BlazorApp1.Models
+@using BlazorApp1.Services
+@using BlazorApp1.Components.Shared
+@using System.Security.Claims
+@using System.Net.Http.Headers
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject CampaignService CampaignService
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@attribute [Authorize]
+
+<PageTitle>DM Dashboard — @(campaign?.Name ?? "Loading...")</PageTitle>
+
+@if (isLoading)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (!isDM)
+{
+    <div class="container mt-5">
+        <div class="alert alert-danger d-flex align-items-center gap-2">
+            <i class="bi bi-shield-lock fs-4"></i>
+            <div>
+                <strong>Access Denied.</strong> This page is only accessible to the Dungeon Master of this campaign.
+            </div>
+        </div>
+        <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo($"/campaigns/{CampaignId}")'>
+            <i class="bi bi-arrow-left"></i> Back to Campaign
+        </button>
+    </div>
+}
+else
+{
+    <div class="container-fluid mt-3">
+        <!-- Header -->
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-outline-secondary btn-sm" @onclick='() => Navigation.NavigateTo($"/campaigns/{CampaignId}")'>
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+                <div>
+                    <h2 class="mb-0">
+                        <i class="bi bi-shield-fill text-warning me-2"></i>DM Dashboard
+                    </h2>
+                    <small class="text-muted">@campaign!.Name</small>
+                </div>
+            </div>
+            <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+                <i class="bi bi-crown-fill me-1"></i> Dungeon Master
+            </span>
+        </div>
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "dice" ? "active" : "")" style="cursor:pointer"
+                   @onclick='() => activeTab = "dice"'>
+                    <i class="bi bi-dice-5 me-1"></i> Dice Roller
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "initiative" ? "active" : "")" style="cursor:pointer"
+                   @onclick='() => activeTab = "initiative"'>
+                    <i class="bi bi-list-ol me-1"></i> Initiative Tracker
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "resources" ? "active" : "")" style="cursor:pointer"
+                   @onclick='() => activeTab = "resources"'>
+                    <i class="bi bi-folder2-open me-1"></i> Resources
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "npcs" ? "active" : "")" style="cursor:pointer"
+                   @onclick='() => activeTab = "npcs"'>
+                    <i class="bi bi-people me-1"></i> NPCs
+                    <span class="badge bg-secondary ms-1">Soon</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "notes" ? "active" : "")" style="cursor:pointer"
+                   @onclick='() => activeTab = "notes"'>
+                    <i class="bi bi-journal-text me-1"></i> DM Notes
+                </a>
+            </li>
+        </ul>
+
+        <!-- ===== DICE ROLLER TAB ===== -->
+        @if (activeTab == "dice")
+        {
+            <div class="row g-4">
+                <!-- Roll Feed (Stream Deck or blank hint) -->
+                <div class="col-12 col-lg-5">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="bi bi-dice-5 me-1"></i> Roll History
+                            </h5>
+                            @if (streamDeckActive)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="bi bi-lightning-fill me-1"></i> Stream Deck Live
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Manual Mode</span>
+                            }
+                        </div>
+                        <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                            @if (rollHistory.Count == 0)
+                            {
+                                <div class="text-center text-muted py-5 px-3">
+                                    <i class="bi bi-dice-5" style="font-size: 3rem; opacity: 0.3;"></i>
+                                    <p class="mt-3 mb-1">No rolls yet.</p>
+                                    @if (streamDeckActive)
+                                    {
+                                        <small>Press a button on your Stream Deck to roll!</small>
+                                    }
+                                    else
+                                    {
+                                        <small>Use the roller on the right, or connect your Stream Deck.</small>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="list-group list-group-flush">
+                                    @foreach (var (roll, index) in rollHistory.Select((r, i) => (r, i)))
+                                    {
+                                        <div class="list-group-item @(index == 0 ? "list-group-item-action" : "") py-2">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span class="badge @GetRollTypeBadgeClass(roll.RollType) me-2">@roll.RollType</span>
+                                                    <span class="text-muted small">@roll.DiceNotation</span>
+                                                </div>
+                                                <div class="text-end">
+                                                    @if (IsCrit(roll))
+                                                    {
+                                                        <span class="fw-bold text-success fs-5">CRIT! (@roll.FinalTotal)</span>
+                                                    }
+                                                    else if (IsFumble(roll))
+                                                    {
+                                                        <span class="fw-bold text-danger fs-5">FUMBLE (@roll.FinalTotal)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="fw-bold fs-5">@roll.FinalTotal</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">
+                                                [@string.Join(", ", roll.Results ?? new())]
+                                                @if (roll.Modifier != 0)
+                                                {
+                                                    <span> @(roll.Modifier > 0 ? "+" : "")@roll.Modifier mod</span>
+                                                }
+                                                <span class="ms-2 float-end">@roll.Timestamp.ToLocalTime().ToString("h:mm:ss tt")</span>
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        @if (rollHistory.Count > 0)
+                        {
+                            <div class="card-footer text-end">
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => rollHistory.Clear()">
+                                    <i class="bi bi-trash"></i> Clear History
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Manual Dice Roller (always shown, but labeled differently when Stream Deck active) -->
+                <div class="col-12 col-lg-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-hand-index-thumb me-1"></i>
+                                @(streamDeckActive ? "Manual Override" : "Dice Roller")
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Quick d20 Rolls -->
+                            <h6 class="text-muted text-uppercase small mb-3">Quick Rolls</h6>
+                            <div class="d-flex flex-wrap gap-2 mb-4">
+                                <button class="btn btn-outline-primary" @onclick='() => QuickRoll("Skill Check", 1, 20)'>
+                                    <i class="bi bi-star me-1"></i>Skill Check
+                                </button>
+                                <button class="btn btn-outline-success" @onclick='() => QuickRoll("Saving Throw", 1, 20)'>
+                                    <i class="bi bi-shield me-1"></i>Saving Throw
+                                </button>
+                                <button class="btn btn-outline-danger" @onclick='() => QuickRoll("Attack Roll", 1, 20)'>
+                                    <i class="bi bi-crosshair me-1"></i>Attack Roll
+                                </button>
+                                <button class="btn btn-outline-warning" @onclick='() => QuickRoll("Initiative", 1, 20)'>
+                                    <i class="bi bi-lightning me-1"></i>Initiative
+                                </button>
+                            </div>
+
+                            <!-- Custom Roll Builder -->
+                            <h6 class="text-muted text-uppercase small mb-3">Custom Roll</h6>
+                            <div class="row g-2 align-items-end mb-3">
+                                <div class="col-auto">
+                                    <label class="form-label small">Dice Count</label>
+                                    <input type="number" class="form-control form-control-sm" style="width: 75px;"
+                                           @bind="customDiceCount" min="1" max="20" />
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small">Die Type</label>
+                                    <select class="form-select form-select-sm" style="width: 100px;" @bind="customDiceType">
+                                        <option value="4">d4</option>
+                                        <option value="6">d6</option>
+                                        <option value="8">d8</option>
+                                        <option value="10">d10</option>
+                                        <option value="12">d12</option>
+                                        <option value="20" selected>d20</option>
+                                        <option value="100">d100</option>
+                                    </select>
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small">Modifier</label>
+                                    <input type="number" class="form-control form-control-sm" style="width: 80px;"
+                                           @bind="customModifier" min="-20" max="20" />
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small">Adv/Dis</label>
+                                    <select class="form-select form-select-sm" @bind="customAdvantage">
+                                        <option value="normal">Normal</option>
+                                        <option value="advantage">Advantage</option>
+                                        <option value="disadvantage">Disadvantage</option>
+                                    </select>
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small">Label</label>
+                                    <input type="text" class="form-control form-control-sm" style="width: 120px;"
+                                           @bind="customLabel" placeholder="Custom Roll" />
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" @onclick="RollCustom" disabled="@isRolling">
+                                @if (isRolling)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="bi bi-dice-5 me-1"></i> Roll @customDiceCount d@(customDiceType)@(customModifier != 0 ? (customModifier > 0 ? $" +{customModifier}" : $" {customModifier}") : "")
+                            </button>
+
+                            <!-- Last Result Display -->
+                            @if (lastManualRoll != null)
+                            {
+                                <div class="mt-4 p-3 rounded text-center @(IsCrit(lastManualRoll) ? "bg-success bg-opacity-10 border border-success" : IsFumble(lastManualRoll) ? "bg-danger bg-opacity-10 border border-danger" : "bg-light")">
+                                    <div class="text-muted small mb-1">@lastManualRoll.RollType — @lastManualRoll.DiceNotation</div>
+                                    @if (IsCrit(lastManualRoll))
+                                    {
+                                        <div class="text-success fw-bold" style="font-size: 1.2rem;">CRITICAL HIT!</div>
+                                    }
+                                    else if (IsFumble(lastManualRoll))
+                                    {
+                                        <div class="text-danger fw-bold" style="font-size: 1.2rem;">CRITICAL FAIL!</div>
+                                    }
+                                    <div class="display-4 fw-bold">@lastManualRoll.FinalTotal</div>
+                                    <small class="text-muted">
+                                        Dice: [@string.Join(", ", lastManualRoll.Results ?? new())]
+                                        @if (lastManualRoll.Modifier != 0)
+                                        {
+                                            <span> @(lastManualRoll.Modifier > 0 ? "+" : "")@lastManualRoll.Modifier</span>
+                                        }
+                                    </small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        else if (activeTab == "initiative")
+        {
+            <div class="row g-4">
+                <div class="col-12 col-lg-6">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-list-ol me-1"></i> Initiative Order</h5>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-warning" @onclick="NextTurn" disabled="@(initiativeOrder.Count == 0)">
+                                    <i class="bi bi-skip-forward-fill"></i> Next Turn
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="ClearInitiative" disabled="@(initiativeOrder.Count == 0)">
+                                    <i class="bi bi-x-lg"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            @if (initiativeOrder.Count == 0)
+                            {
+                                <div class="text-center text-muted py-5">
+                                    <i class="bi bi-list-ol" style="font-size: 3rem; opacity: 0.3;"></i>
+                                    <p class="mt-3">Add combatants to start tracking initiative.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="list-group list-group-flush">
+                                    @foreach (var (entry, index) in initiativeOrder.OrderByDescending(e => e.Roll).Select((e, i) => (e, i)))
+                                    {
+                                        <div class="list-group-item d-flex align-items-center gap-3 @(index == currentTurnIndex ? "list-group-item-warning" : "")">
+                                            @if (index == currentTurnIndex)
+                                            {
+                                                <i class="bi bi-caret-right-fill text-warning"></i>
+                                            }
+                                            else
+                                            {
+                                                <span style="width: 16px;"></span>
+                                            }
+                                            <span class="badge bg-primary rounded-pill" style="min-width: 40px;">@entry.Roll</span>
+                                            <span class="flex-grow-1 fw-semibold">@entry.Name</span>
+                                            <span class="badge @(entry.IsNPC ? "bg-danger" : "bg-info") text-dark">
+                                                @(entry.IsNPC ? "NPC" : "PC")
+                                            </span>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveFromInitiative(entry)">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (initiativeOrder.Count > 0)
+                    {
+                        <div class="card mt-3">
+                            <div class="card-body text-center">
+                                <div class="text-muted small">Current Round</div>
+                                <div class="display-5 fw-bold">@currentRound</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Add Combatant Form -->
+                <div class="col-12 col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-person-plus me-1"></i> Add Combatant</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Name</label>
+                                <input type="text" class="form-control" @bind="newCombatantName" placeholder="e.g. Goblin Chief, Thorin..." />
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col">
+                                    <label class="form-label">Initiative Roll</label>
+                                    <input type="number" class="form-control" @bind="newCombatantRoll" min="1" max="30" />
+                                </div>
+                                <div class="col-auto d-flex align-items-end">
+                                    <button class="btn btn-outline-secondary" @onclick="RollInitiativeForNew">
+                                        <i class="bi bi-dice-5"></i> Auto Roll
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="isNPCCheck" @bind="newCombatantIsNPC" />
+                                <label class="form-check-label" for="isNPCCheck">NPC / Monster</label>
+                            </div>
+                            <button class="btn btn-primary w-100" @onclick="AddCombatant"
+                                    disabled="@string.IsNullOrWhiteSpace(newCombatantName)">
+                                <i class="bi bi-plus-lg me-1"></i> Add to Tracker
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick-add players from campaign -->
+                    @if (campaign?.Members != null && campaign.Members.Count > 0)
+                    {
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">Quick-Add Campaign Members</h6>
+                            </div>
+                            <div class="card-body d-flex flex-wrap gap-2">
+                                @foreach (var member in campaign.Members.Where(m => m.Role == "DM"))
+                                {
+                                    <button class="btn btn-sm btn-outline-info"
+                                            @onclick="() => QuickAddMember(member.Username)">
+                                        <i class="bi bi-person me-1"></i>@member.Username
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        else if (activeTab == "resources")
+        {
+            <CampaignResources CampaignId="CampaignId" IsDM="true" CurrentUserId="@currentUserId" />
+        }
+
+        else if (activeTab == "npcs")
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-people" style="font-size: 4rem; opacity: 0.3;"></i>
+                <h4 class="mt-3">NPC Manager</h4>
+                <p>NPC management is coming soon. You'll be able to create, track, and manage all your NPCs here — including their stats, notes, relationships, and current location in your world.</p>
+                <span class="badge bg-secondary fs-6 px-3 py-2">Coming Soon</span>
+            </div>
+        }
+
+        else if (activeTab == "notes")
+        {
+            <div class="row">
+                <div class="col-12 col-lg-8">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-journal-text me-1"></i> DM Notes</h5>
+                            <button class="btn btn-sm btn-primary" @onclick="SaveNotes" disabled="@isSavingNotes">
+                                @if (isSavingNotes)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="bi bi-floppy me-1"></i> Save
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-2">
+                                Private notes only visible to you. Markdown supported.
+                            </p>
+                            <textarea class="form-control font-monospace"
+                                      rows="20"
+                                      style="resize: vertical;"
+                                      @bind="dmNotes"
+                                      placeholder="# Session Notes&#10;&#10;## Upcoming Plot Points&#10;- ..."></textarea>
+                        </div>
+                        @if (!string.IsNullOrEmpty(notesSavedMessage))
+                        {
+                            <div class="card-footer text-success">
+                                <i class="bi bi-check-circle me-1"></i> @notesSavedMessage
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-12 col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="bi bi-lightbulb me-1"></i> Quick Reference</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <div class="text-muted small text-uppercase mb-1">Difficulty Classes</div>
+                                @foreach (var dc in new[] { ("Very Easy", 5), ("Easy", 10), ("Medium", 15), ("Hard", 20), ("Very Hard", 25), ("Nearly Impossible", 30) })
+                                {
+                                    <div class="d-flex justify-content-between small py-1 border-bottom">
+                                        <span>@dc.Item1</span><strong>DC @dc.Item2</strong>
+                                    </div>
+                                }
+                            </div>
+                            <div>
+                                <div class="text-muted small text-uppercase mb-1">Conditions</div>
+                                @foreach (var condition in new[] { "Blinded", "Charmed", "Deafened", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious" })
+                                {
+                                    <span class="badge bg-secondary me-1 mb-1">@condition</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int CampaignId { get; set; }
+
+    private CampaignDetailDto? campaign;
+    private bool isLoading = true;
+    private bool isDM = false;
+    private string? currentUserId;
+    private string activeTab = "dice";
+
+    // SignalR / Dice
+    private HubConnection? rollHubConnection;
+    private bool streamDeckActive = false;
+    private List<DiceRoll> rollHistory = new();
+    private DiceRoll? lastManualRoll;
+    private bool isRolling = false;
+
+    // Manual roll options
+    private int customDiceCount = 1;
+    private int customDiceType = 20;
+    private int customModifier = 0;
+    private string customAdvantage = "normal";
+    private string customLabel = "";
+
+    // Initiative Tracker
+    private List<InitiativeEntry> initiativeOrder = new();
+    private int currentTurnIndex = 0;
+    private int currentRound = 1;
+    private string newCombatantName = "";
+    private int newCombatantRoll = 10;
+    private bool newCombatantIsNPC = false;
+    private Random _rng = new();
+
+    // DM Notes
+    private string dmNotes = "";
+    private bool isSavingNotes = false;
+    private string notesSavedMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        campaign = await CampaignService.GetCampaignAsync(CampaignId);
+
+        if (campaign != null && campaign.CreatedById == currentUserId)
+        {
+            isDM = true;
+            await ConnectToRollHub();
+            LoadNotesFromLocalStorage();
+        }
+
+        isLoading = false;
+    }
+
+    // ---- SignalR ----
+
+    private async Task ConnectToRollHub()
+    {
+        try
+        {
+            rollHubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/rollhub"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            rollHubConnection.On<DiceRoll>("ReceiveRoll", (roll) =>
+            {
+                streamDeckActive = true;
+                rollHistory.Insert(0, roll);
+                if (rollHistory.Count > 50) rollHistory.RemoveAt(rollHistory.Count - 1);
+                InvokeAsync(StateHasChanged);
+            });
+
+            await rollHubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DM Dashboard] SignalR error: {ex.Message}");
+        }
+    }
+
+    // ---- Dice Roller ----
+
+    private async Task QuickRoll(string rollType, int count, int diceType)
+    {
+        isRolling = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/dice/skillcheck", new
+            {
+                Modifier = 0, Advantage = false, Disadvantage = false
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var roll = await response.Content.ReadFromJsonAsync<DiceRoll>();
+                if (roll != null)
+                {
+                    roll.RollType = rollType;
+                    lastManualRoll = roll;
+                    rollHistory.Insert(0, roll);
+                    if (rollHistory.Count > 50) rollHistory.RemoveAt(rollHistory.Count - 1);
+                }
+            }
+        }
+        catch { }
+        finally { isRolling = false; }
+    }
+
+    private async Task RollCustom()
+    {
+        isRolling = true;
+        try
+        {
+            var endpoint = customDiceType == 20 ? "api/dice/skillcheck" : "api/dice/damage";
+            object body = customDiceType == 20
+                ? new { Modifier = customModifier, Advantage = customAdvantage == "advantage", Disadvantage = customAdvantage == "disadvantage" }
+                : (object)new { NumberOfDice = customDiceCount, DiceType = customDiceType, Modifier = customModifier };
+
+            var response = await Http.PostAsJsonAsync(endpoint, body);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var roll = await response.Content.ReadFromJsonAsync<DiceRoll>();
+                if (roll != null)
+                {
+                    roll.RollType = string.IsNullOrWhiteSpace(customLabel) ? "Custom Roll" : customLabel;
+                    lastManualRoll = roll;
+                    rollHistory.Insert(0, roll);
+                    if (rollHistory.Count > 50) rollHistory.RemoveAt(rollHistory.Count - 1);
+                }
+            }
+        }
+        catch { }
+        finally { isRolling = false; }
+    }
+
+    private bool IsCrit(DiceRoll roll) => roll.Results?.Count == 1 && roll.Results[0] == 20;
+    private bool IsFumble(DiceRoll roll) => roll.Results?.Count == 1 && roll.Results[0] == 1;
+
+    private string GetRollTypeBadgeClass(string rollType) => rollType switch
+    {
+        "Skill Check" => "bg-primary",
+        "Saving Throw" => "bg-success",
+        "Attack Roll" => "bg-danger",
+        "Initiative" => "bg-warning text-dark",
+        "Damage Roll" => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    // ---- Initiative Tracker ----
+
+    private void AddCombatant()
+    {
+        if (string.IsNullOrWhiteSpace(newCombatantName)) return;
+        initiativeOrder.Add(new InitiativeEntry
+        {
+            Name = newCombatantName.Trim(),
+            Roll = newCombatantRoll,
+            IsNPC = newCombatantIsNPC
+        });
+        newCombatantName = "";
+        newCombatantRoll = 10;
+        newCombatantIsNPC = false;
+        currentTurnIndex = 0;
+    }
+
+    private void RollInitiativeForNew()
+    {
+        newCombatantRoll = _rng.Next(1, 21);
+    }
+
+    private void QuickAddMember(string username)
+    {
+        newCombatantName = username;
+        newCombatantRoll = _rng.Next(1, 21);
+        newCombatantIsNPC = false;
+    }
+
+    private void RemoveFromInitiative(InitiativeEntry entry)
+    {
+        initiativeOrder.Remove(entry);
+        if (currentTurnIndex >= initiativeOrder.Count)
+            currentTurnIndex = 0;
+    }
+
+    private void NextTurn()
+    {
+        if (initiativeOrder.Count == 0) return;
+        currentTurnIndex++;
+        if (currentTurnIndex >= initiativeOrder.Count)
+        {
+            currentTurnIndex = 0;
+            currentRound++;
+        }
+    }
+
+    private void ClearInitiative()
+    {
+        initiativeOrder.Clear();
+        currentTurnIndex = 0;
+        currentRound = 1;
+    }
+
+    // ---- DM Notes (stored in browser localStorage via JS) ----
+
+    private void LoadNotesFromLocalStorage()
+    {
+        // Loaded after render via JS interop
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isDM)
+        {
+            try
+            {
+                var saved = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", $"dm-notes-{CampaignId}");
+                if (!string.IsNullOrEmpty(saved))
+                {
+                    dmNotes = saved;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task SaveNotes()
+    {
+        isSavingNotes = true;
+        notesSavedMessage = "";
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", $"dm-notes-{CampaignId}", dmNotes);
+            notesSavedMessage = "Notes saved!";
+            _ = Task.Delay(3000).ContinueWith(_ => { notesSavedMessage = ""; InvokeAsync(StateHasChanged); });
+        }
+        catch { }
+        finally { isSavingNotes = false; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (rollHubConnection is not null)
+            await rollHubConnection.DisposeAsync();
+    }
+
+    // ---- Inner model ----
+    private class InitiativeEntry
+    {
+        public string Name { get; set; } = "";
+        public int Roll { get; set; }
+        public bool IsNPC { get; set; }
+    }
+}

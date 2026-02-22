@@ -35,7 +35,10 @@
             <button class="btn btn-outline-secondary mb-3" @onclick="GoBack">
                 <i class="bi bi-arrow-left"></i> Back to Campaigns
             </button>
-
+            @if (isDM)
+            {
+                <button class="btn btn-outline-primary mb-3" @onclick="ToDMDash">DM</button>
+            }
             <h1>@campaign.Name</h1>
             <p class="lead">@campaign.Description</p>
             <p class="text-muted">
@@ -220,6 +223,11 @@
         Navigation.NavigateTo("/campaigns");
     }
 
+    private void ToDMDash()
+    {
+        Navigation.NavigateTo($"campaigns/{CampaignId}/dm");
+    }
+
     private void CreateCharacter()
     {
         Navigation.NavigateTo($"/campaigns/{CampaignId}/characters/create");
@@ -245,3 +253,4 @@
         StateHasChanged();
     }
 }
+        <!-- ===== INITIATIVE TRACKER TAB ===== -->

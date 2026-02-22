@@ -793,7 +793,7 @@
                 return InvokeAsync(StateHasChanged);
             };
 
-            await resourceHubConnection.StartAsync();
+             await resourceHubConnection.StartAsync();
             resourceHubConnected = true;
             await JoinResourceHubGroups();
         }

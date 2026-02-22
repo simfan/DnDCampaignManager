@@ -1,7 +1,9 @@
-﻿using BlazorApp1.Data;
+﻿using BlazorApp1.Conversions;
+using BlazorApp1.Data;
 using BlazorApp1.DTOs;
 using BlazorApp1.Models;
-using BlazorApp1.Conversions;
+using BlazorApp1.Services;
+using BlazorApp1.Services.Server;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -17,13 +19,15 @@ namespace BlazorApp1.Controllers
     public class CharactersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly CharacterPdfService _pdfService;
         private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         };
-        public CharactersController(ApplicationDbContext context)
+        public CharactersController(ApplicationDbContext context, CharacterPdfService pdfService)
         {
             _context = context;
+            _pdfService = pdfService;
         }
 
         // GET: api/Characters
@@ -36,7 +40,7 @@ namespace BlazorApp1.Controllers
             var characters = await _context.Characters
                 .Include(c => c.Classes)
                 .Include(c => c.Campaign)
-                .Where(c => c.PlayerId == userId)
+                //.Where(c => c.PlayerId == userId)
                 .ToListAsync();
 
             var characterDtos = characters.Select(c => MapToCharacterDto(c)).ToList();
@@ -268,6 +272,42 @@ namespace BlazorApp1.Controllers
 
             return NoContent();
         }
+
+        // GET /api/characters/export/{id}/json
+        [HttpGet("export/{id}/json")]
+        public async Task<IActionResult> ExportJson(int id)
+        {
+            var character = await _context.Characters
+                .Include(c => c.Classes)
+                .Include(c => c.Campaign)
+                .Include(c => c.Player)
+                .FirstOrDefaultAsync(c => c.CharacterId == id);
+
+            if (character == null) return NotFound();
+            var characterDto = MapToCharacterDto(character);
+            var json = JsonSerializer.Serialize(characterDto, new JsonSerializerOptions { WriteIndented = true });
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+            return File(bytes, "application/json", $"{characterDto.Name.Replace(" ", "_")}_character.json");
+        }
+
+        // GET /api/characters/export/{id}/pdf
+        [HttpGet("export/{id}/pdf")]
+        public async Task<IActionResult> ExportPdf(int id)
+        {
+            var character = await _context.Characters
+                .Include(c => c.Classes)
+                .Include(c => c.Campaign)
+                .Include(c => c.Player)
+                .FirstOrDefaultAsync(c => c.CharacterId == id);
+            var characterDto = MapToCharacterDto(character);
+            if (character == null) return NotFound();
+
+            var pdf = _pdfService.GenerateCharacterSheet(characterDto);
+            return File(pdf, "application/pdf", $"{characterDto.Name.Replace(" ", "_")}_character_sheet.pdf");
+        }
+
+
+
 
         private bool CharacterExists(int id)
         {

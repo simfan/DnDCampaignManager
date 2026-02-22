@@ -4,6 +4,7 @@ using BlazorApp1.Data;
 using BlazorApp1.Handlers;
 using BlazorApp1.Hubs;
 using BlazorApp1.Services;
+using BlazorApp1.Services.Server;
 using BlazorStrap;
 using BlazorStrap.V5;
 using Microsoft.AspNetCore.Components;
@@ -42,6 +43,7 @@ builder.Services.AddScoped<HttpClient>(sp =>
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 builder.Services.AddScoped<DiceService>();
+builder.Services.AddScoped<CharacterPdfService>();
 builder.Services.AddScoped(sp => new HttpClient
 {
     BaseAddress = new Uri(builder.Configuration["FrontendUrl"] ?? "https://localhost:7282")
