@@ -2,6 +2,7 @@
 @page "/campaigns/{CampaignId:int}/characters/create"
 @rendermode InteractiveServer
 @using BlazorApp1.DTOs
+@using BlazorApp1.Helpers
 @using BlazorApp1.Services
 @using BlazorStrap
 @using BlazorStrap.V5
@@ -74,7 +75,7 @@
                         <div class="card-body">
                             @foreach (var characterClass in newCharacter.Classes)
                             {
-                                <div class="row mb-2">
+                                <!--<div class="row mb-2">
                                     <div class="col-8">
                                         <input type="text" class="form-control" placeholder="Class name" @bind="characterClass.Name" />
                                     </div>
@@ -86,6 +87,59 @@
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </div>
+                                </div>-->
+                                var availableSubclasses = ClassSubclasses.GetSubclasses(characterClass.Name);
+
+                                <div class="row mb-3 align-items-start g-2">
+
+                                    <!-- Class name (dropdown) -->
+                                    <div class="col-4">
+                                        <label class="form-label small mb-1">Class</label>
+                                        <InputSelect class="form-select"
+                                                     Value="characterClass.Name"
+                                                     ValueChanged="(string val) => OnClassNameChanged(characterClass, val)"
+                                                     ValueExpression="() => characterClass.Name">
+                                            <option value="">-- Select Class --</option>
+                                            @foreach (var cls in ClassSubclasses.AllClasses)
+                                            {
+                                                <option value="@cls">@cls</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+
+                                    <!-- Subclass (dropdown, only shown when class is chosen) -->
+                                    <div class="col-4">
+                                        <label class="form-label small mb-1">Subclass</label>
+                                        @if (availableSubclasses.Count == 0)
+                                        {
+                                            <input class="form-control" disabled placeholder="Choose a class first" />
+                                        }
+                                        else
+                                        {
+                                            <InputSelect class="form-select" @bind-Value="characterClass.Subclass">
+                                                <option value="">-- None / Not yet chosen --</option>
+                                                @foreach (var sub in availableSubclasses)
+                                                {
+                                                    <option value="@sub">@sub</option>
+                                                }
+                                            </InputSelect>
+                                        }
+                                    </div>
+
+                                    <!-- Level -->
+                                    <div class="col-2">
+                                        <label class="form-label small mb-1">Level</label>
+                                        <InputNumber class="form-control" @bind-Value="characterClass.Level" min="1" max="20" />
+                                    </div>
+
+                                    <!-- Remove button -->
+                                    <div class="col-1 d-flex align-items-end pb-1">
+                                        <button type="button" class="btn btn-danger btn-sm"
+                                                @onclick="() => RemoveClass(characterClass)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+
                                 </div>
                             }
                             <button type="button" class="btn btn-secondary btn-sm" @onclick="AddClass">
@@ -215,6 +269,12 @@
     private void RemoveClass(CharacterClassDto characterClass)
     {
         newCharacter.Classes.Remove(characterClass);
+    }
+
+    private void OnClassNameChanged(CharacterClassDto characterClass, string newName)
+    {
+        characterClass.Name = newName;
+        characterClass.Subclass = null;
     }
 
     private async Task CreateNewCharacter()

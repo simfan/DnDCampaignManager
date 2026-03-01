@@ -118,5 +118,6 @@ namespace BlazorApp1.DTOs
         public int CharacterClassId { get; set; }
         public string Name { get; set; } = string.Empty;
         public int Level { get; set; } = 1;
+        public string? Subclass { get; set; }
     }
 }

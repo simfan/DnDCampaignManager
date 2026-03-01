@@ -229,7 +229,8 @@ namespace BlazorApp1.Controllers
                 {
                     CharacterId = existingCharacter.CharacterId,
                     Name = classDto.Name,
-                    Level = classDto.Level
+                    Level = classDto.Level,
+                    Subclass = classDto.Subclass
                 };
                 _context.CharacterClasses.Add(characterClass);
             }
@@ -339,7 +340,8 @@ namespace BlazorApp1.Controllers
                     {
                         CharacterClassId = cc.CharacterClassId,
                         Name = cc.Name,
-                        Level = cc.Level
+                        Level = cc.Level,
+                        Subclass = cc.Subclass
                     }).ToList(),
                     Skills = skills,
                     Strength = character.Strength,
