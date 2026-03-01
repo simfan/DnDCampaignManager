@@ -44,6 +44,7 @@ builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 builder.Services.AddScoped<DiceService>();
 builder.Services.AddScoped<CharacterPdfService>();
+builder.Services.AddScoped<DndBeyondImportService>();
 builder.Services.AddScoped(sp => new HttpClient
 {
     BaseAddress = new Uri(builder.Configuration["FrontendUrl"] ?? "https://localhost:7282")
@@ -68,6 +69,11 @@ builder.Services.AddHttpClient<CharacterService>(client =>
 .AddHttpMessageHandler<CookieHandler>();
 ;
 builder.Services.AddHttpClient<ChatService>(client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7282/");
+})
+.AddHttpMessageHandler<CookieHandler>();
+builder.Services.AddHttpClient<DndBeyondImportService>(client =>
 {
     client.BaseAddress = new Uri("https://localhost:7282/");
 })
@@ -129,6 +135,10 @@ builder.Services
     .AddCircuitOptions(options =>
     {
         options.DetailedErrors = true;
+    })
+    .AddHubOptions(options =>
+    {
+        options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10MB
     });
 
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
@@ -169,6 +179,12 @@ app.UseCors("StreamDeckLocal");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.Use(async (context, next) =>
+{
+    context.Request.Headers["X-Forwarded-Proto"] = "https";
+    await next();
+});
 
 //app.UseAntiforgery();
 app.UseWhen(

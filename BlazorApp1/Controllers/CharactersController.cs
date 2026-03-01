@@ -161,7 +161,8 @@ namespace BlazorApp1.Controllers
                 Classes = createdCharacter.Classes.Select(cc => new CharacterClass
                 {
                     Name = cc.Name,
-                    Level = cc.Level
+                    Level = cc.Level,
+                    Subclass = cc.Subclass
                 }).ToList()
             };
             _context.Characters.Add(character);
@@ -306,8 +307,167 @@ namespace BlazorApp1.Controllers
             var pdf = _pdfService.GenerateCharacterSheet(characterDto);
             return File(pdf, "application/pdf", $"{characterDto.Name.Replace(" ", "_")}_character_sheet.pdf");
         }
+        [HttpPost("import/dndbeyond")]
+        public async Task<ActionResult<CharacterDto>> ImportFromDndBeyond(
+    [FromBody] DndBeyondImportRequest request,
+    [FromServices] DndBeyondImportService importService)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
+            var isMember = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == request.CampaignId && cm.UserId == userId);
 
+            if (!isMember)
+                return Forbid();
+
+            CreateCharacterDto createDto;
+            try
+            {
+                if (request.DndBeyondCharacterId.HasValue)
+                    createDto = await importService.ImportByIdAsync(request.DndBeyondCharacterId.Value, request.CampaignId);
+                else if (!string.IsNullOrWhiteSpace(request.RawJson))
+                    createDto = importService.ImportFromJson(request.RawJson, request.CampaignId);
+                else
+                    return BadRequest("Provide either 'dndBeyondCharacterId' or 'rawJson'.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Failed to import character: {ex.Message}");
+            }
+
+            var character = new Character
+            {
+                Name = createDto.Name,
+                Race = createDto.Race,
+                CampaignId = createDto.CampaignId,
+                PlayerId = userId,
+                Strength = createDto.Strength,
+                Dexterity = createDto.Dexterity,
+                Constitution = createDto.Constitution,
+                Intelligence = createDto.Intelligence,
+                Wisdom = createDto.Wisdom,
+                Charisma = createDto.Charisma,
+                ArmorClass = createDto.ArmorClass,
+                MaxHitPoints = createDto.MaxHitPoints,
+                CurrentHitPoints = createDto.CurrentHitPoints,
+                ExperiencePoints = 0,
+                CreatedDate = DateTime.UtcNow,
+                SkillsJson = JsonSerializer.Serialize(createDto.Skills),
+                Classes = createDto.Classes.Select(cc => new CharacterClass
+                {
+                    Name = cc.Name,
+                    Level = cc.Level
+                }).ToList()
+            };
+
+            _context.Characters.Add(character);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetCharacter),
+                new { id = character.CharacterId },
+                MapToCharacterDto(character));
+        }
+        // POST: api/Characters/import/dndbeyond
+        /*[HttpPost("import/dndbeyond")]
+        public async Task<ActionResult<CharacterDto>> ImportFromDndBeyond(
+            [FromBody] DndBeyondImportRequest request,
+            [FromServices] DndBeyondImportService importService)/*,
+            [FromServices] IHttpClientFactory httpClientFactory)*/
+        /*{
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Verify the user is a member of the target campaign
+            var isMember = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == request.CampaignId && cm.UserId == userId);
+
+            if (!isMember)
+                return Forbid();
+
+            // ── Resolve the raw DDB JSON ────────────────────────────────────────────
+            string ddbJson;
+
+            if (!string.IsNullOrWhiteSpace(request.RawJson))
+            {
+                // User pasted the JSON directly
+                ddbJson = request.RawJson;
+            }
+            else if (request.DndBeyondCharacterId.HasValue)
+            {
+                // Fetch from the unofficial DDB endpoint
+                var httpClient = httpClientFactory.CreateClient();
+                httpClient.DefaultRequestHeaders.Add(
+                    "User-Agent",
+                    "Mozilla/5.0 (compatible; DnDManagerImporter/1.0)");
+
+                var url = $"https://www.dndbeyond.com/character/{request.DndBeyondCharacterId}/json";
+
+                HttpResponseMessage response;
+                try
+                {
+                    response = await httpClient.GetAsync(url);
+                }
+                catch (HttpRequestException ex)
+                {
+                    return StatusCode(502, $"Failed to reach D&D Beyond: {ex.Message}");
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return StatusCode((int)response.StatusCode,
+                        "D&D Beyond returned an error. Make sure the character is set to public sharing.");
+                }
+
+                ddbJson = await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                return BadRequest("Provide either 'dndBeyondCharacterId' or 'rawJson'.");
+            }
+
+            // ── Map to CreateCharacterDto ───────────────────────────────────────────
+            CreateCharacterDto createDto;
+            try
+            {
+                createDto = importService.Map(ddbJson, request.CampaignId);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Failed to parse D&D Beyond character data: {ex.Message}");
+            }
+
+            // ── Persist (reuses existing create logic) ─────────────────────────────
+            var character = new Character
+            {
+                Name = createDto.Name,
+                Race = createDto.Race,
+                CampaignId = createDto.CampaignId,
+                PlayerId = userId,
+                Strength = createDto.Strength,
+                Dexterity = createDto.Dexterity,
+                Constitution = createDto.Constitution,
+                Intelligence = createDto.Intelligence,
+                Wisdom = createDto.Wisdom,
+                Charisma = createDto.Charisma,
+                ArmorClass = createDto.ArmorClass,
+                MaxHitPoints = createDto.MaxHitPoints,
+                CurrentHitPoints = createDto.CurrentHitPoints,
+                ExperiencePoints = 0,
+                CreatedDate = DateTime.UtcNow,
+                SkillsJson = JsonSerializer.Serialize(createDto.Skills),
+                Classes = createDto.Classes.Select(cc => new CharacterClass
+                {
+                    Name = cc.Name,
+                    Level = cc.Level
+                }).ToList()
+            };
+
+            _context.Characters.Add(character);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetCharacter),
+                new { id = character.CharacterId },
+                MapToCharacterDto(character));
+        }*/
 
 
         private bool CharacterExists(int id)

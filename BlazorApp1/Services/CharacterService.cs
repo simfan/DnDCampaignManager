@@ -45,5 +45,32 @@ namespace BlazorApp1.Services
             var response = await _httpClient.DeleteAsync($"api/characters/{id}");
             response.EnsureSuccessStatusCode();
         }
+
+        public async Task<CharacterDto?> ImportFromDndBeyondAsync(DndBeyondImportRequest request)
+        {
+            if (request.DndBeyondCharacterId == null && string.IsNullOrWhiteSpace(request.RawJson))
+                throw new Exception("No character ID or JSON provided.");
+            var response = await _httpClient.PostAsJsonAsync("api/characters/import/dndbeyond", request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new Exception($"({(int)response.StatusCode}): {error}");
+            }
+
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<CharacterDto>();
+        }
+        /*public async Task<CreateCharacterDto> ImportFromDndBeyondAsync(long characterId, int campaignId)
+        {
+            var url = $"https://www.dndbeyond.com/character/{characterId}/json";
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException("D&D Beyond returned an error. Make sure the character is set to public sharing.");
+
+            var json = await response.Content.ReadAsStringAsync();
+            return Map(json, campaignId);
+        }*/
     }
 }

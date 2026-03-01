@@ -1,0 +1,169 @@
+﻿@page "/characters/import/dndbeyond"
+@rendermode InteractiveServer
+@using BlazorApp1.DTOs
+@using BlazorApp1.Services
+@using Microsoft.AspNetCore.Authorization
+@inject CharacterService CharacterService
+@inject CampaignService CampaignService
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@attribute [Authorize]
+
+<PageTitle>Import from D&D Beyond</PageTitle>
+
+<div class="container mt-4" style="max-width: 680px;">
+    <button class="btn btn-outline-secondary mb-3" @onclick='() => Navigation.NavigateTo("/characters")'>
+        <i class="bi bi-arrow-left"></i> Back
+    </button>
+
+    <div class="card">
+        <div class="card-header d-flex align-items-center gap-2">
+            <img src="https://www.dndbeyond.com/favicon.ico" width="20" alt="DnD Beyond" />
+            <h5 class="mb-0">Import from D&amp;D Beyond</h5>
+        </div>
+        <div class="card-body">
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+
+            @if (importedCharacter != null)
+            {
+                <div class="alert alert-success">
+                    <strong>@importedCharacter.Name</strong> imported successfully!
+                </div>
+                <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo($"/characters/{importedCharacter.CharacterId}")'>
+                    View Character
+                </button>
+            }
+            else
+            {
+                <p class="text-muted mb-3">
+                    Enter your D&amp;D Beyond character ID (found in the URL:
+                    <code>dndbeyond.com/characters/<strong>12345678</strong></code>).
+                    The character must have <strong>public sharing</strong> enabled, or you can paste the JSON directly.
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Campaign</label>
+                    <select class="form-select" @bind="selectedCampaignId">
+                        <option value="0">— Select a campaign —</option>
+                        @foreach (var c in campaigns)
+                        {
+                            <option value="@c.CampaignId">@c.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <ul class="nav nav-tabs mb-3">
+                    <li class="nav-item">
+                        <button class="nav-link @(activeTab == "id" ? "active" : "")" @onclick='() => activeTab = "id"'>
+                            Character ID
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link @(activeTab == "json" ? "active" : "")" @onclick='() => activeTab = "json"'>
+                            Paste JSON
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="mb-3" style="display: @(activeTab == "id" ? "block" : "none")">
+                    <label class="form-label">D&amp;D Beyond Character ID</label>
+                    <input type="number" class="form-control" placeholder="e.g. 12345678"
+                           @bind="ddbCharacterId" />
+                    <div class="form-text">
+                        Enable <strong>Public Sharing</strong> on your character in D&amp;D Beyond first.
+                    </div>
+                </div>
+
+                <div class="mb-3" style="display: @(activeTab == "json" ? "block" : "none")">
+                    <label class="form-label">Raw JSON</label>
+                    <textarea class="form-control font-monospace" rows="8"
+                              placeholder="Paste the full JSON from dndbeyond.com/character/{id}/json"
+                              @onchange="OnJsonInput"></textarea>
+                              
+                </div>
+
+                <button class="btn btn-primary" @onclick="DoImport" disabled="@(isImporting || selectedCampaignId == 0)">
+                    @if (isImporting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Import Character
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string activeTab = "id";
+    private long? ddbCharacterId;
+    private string? rawJson = null;
+    private int selectedCampaignId;
+    private bool isImporting;
+    private string? errorMessage;
+    private CharacterDto? importedCharacter;
+
+    // Populate this list however you load campaigns in your app
+    private List<CampaignDto> campaigns = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Replace with your actual campaign-loading service call
+        campaigns = await CampaignService.GetCampaignsAsync();
+    }
+
+    private async Task DoImport()
+    {
+        Console.WriteLine($"activeTab: {activeTab}, rawJson is null: {rawJson == null}, rawJson length: {rawJson?.Length}");
+        errorMessage = null;
+        isImporting = true;
+
+        try
+        {
+            var request = new DndBeyondImportRequest
+            {
+                CampaignId = selectedCampaignId,
+                DndBeyondCharacterId = activeTab == "id" ? ddbCharacterId : null,
+                RawJson = activeTab == "json" ? rawJson : null
+            };
+
+            //var response = await Http.PostAsJsonAsync("api/characters/import/dndbeyond", request);
+            var response = await CharacterService.ImportFromDndBeyondAsync(request);
+            importedCharacter = response;
+            //if (response.IsSuccessStatusCode)
+            {
+                //importedCharacter = await response.Content.ReadFromJsonAsync<CharacterDto>();
+            }
+            /*else
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Import failed ({(int)response.StatusCode}): {body}";
+            }*/
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private void OnJsonInput(ChangeEventArgs e)
+    {
+        rawJson = e.Value?.ToString();
+        Console.WriteLine($"OnJsonInput fired, length: {rawJson?.Length}");
+    }
+
+    // Lightweight summary — replace with your actual campaign DTO if different
+    private class CampaignSummary
+    {
+        public int CampaignId { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+}
