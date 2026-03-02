@@ -261,6 +261,40 @@
                             <i class="bi bi-trash"></i> Delete Character
                         </button>
                     </div>
+
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-download"></i> Export</h5>
+                        </div>
+                        <div class="card-body d-grid gap-2">
+                            <button class="btn btn-outline-primary" @onclick="ExportJson" disabled="@isExporting">
+                                @if (isExporting && exportType == "json")
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-filetype-json me-2"></i>
+                                }
+                                Export JSON
+                            </button>
+                            <button class="btn btn-outline-danger" @onclick="ExportPdf" disabled="@isExporting">
+                                @if (isExporting && exportType == "pdf")
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-file-earmark-pdf me-2"></i>
+                                }
+                                Export PDF
+                            </button>
+                            @if (!string.IsNullOrEmpty(exportError))
+                            {
+                                <div class="alert alert-danger mb-0 py-2 small">@exportError</div>
+                            }
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -356,6 +390,10 @@
     private DiceRoll? lastRoll;
     private bool showSkillManager = false;
     private List<CharacterDto> partyCharacters = new();
+
+    private bool isExporting = false;
+    private string exportType = "";
+    private string? exportError;
 
 
     //private List<InventoryItemDto> campaignInventoryItems = new();
@@ -475,5 +513,48 @@
     {
         lastRoll = roll;
         StateHasChanged();
+    }
+
+    private async Task ExportJson()
+    {
+        await DoExport("json", $"{character.Name}_character.json", "application/json");
+    }
+
+    private async Task ExportPdf()
+    {
+        await DoExport("pdf", $"{character.Name}_character_sheet.pdf", "application/pdf");
+    }
+
+    private async Task DoExport(string type, string fileName, string mimeType)
+    {
+        exportError = null;
+        isExporting = true;
+        exportType = type;
+
+        try
+        {
+            byte[]? bytes = type == "pdf"
+                ? await CharacterService.ExportCharacterPdfAsync(character.CharacterId)
+                : await CharacterService.ExportCharacterJsonAsync(character.CharacterId);
+
+            if (bytes == null || bytes.Length == 0)
+            {
+                exportError = "Export failed. Please try again.";
+                return;
+            }
+
+            // Trigger browser download via JS interop
+            var base64 = Convert.ToBase64String(bytes);
+            await JSRuntime.InvokeVoidAsync("downloadFileFromBase64", fileName, mimeType, base64);
+        }
+        catch (Exception ex)
+        {
+            exportError = $"Export failed: {ex.Message}";
+        }
+        finally
+        {
+            isExporting = false;
+            exportType = "";
+        }
     }
 }

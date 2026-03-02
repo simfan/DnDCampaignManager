@@ -292,7 +292,23 @@ namespace BlazorApp1.Controllers
             return File(bytes, "application/json", $"{characterDto.Name.Replace(" ", "_")}_character.json");
         }
 
-        // GET /api/characters/export/{id}/pdf
+        // GET: api/Characters/{id}/export/json2
+        [HttpGet("{id}/export/json2")]
+        public async Task<IActionResult> ExportCharacterJson(int id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var character = await GetCharacterWithAccessCheck(id, userId);
+            if (character == null) return NotFound();
+
+            var dto = MapToCharacterDto(character);
+            var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+            var fileName = $"{SanitizeFileName(character.Name)}_character.json";
+
+            return File(bytes, "application/json", fileName);
+        }
+
+        // GET /api/characters/{id}/export/pdf
         [HttpGet("export/{id}/pdf")]
         public async Task<IActionResult> ExportPdf(int id)
         {
@@ -307,6 +323,59 @@ namespace BlazorApp1.Controllers
             var pdf = _pdfService.GenerateCharacterSheet(characterDto);
             return File(pdf, "application/pdf", $"{characterDto.Name.Replace(" ", "_")}_character_sheet.pdf");
         }
+        // GET /api/characters/export/{id}/pdf2
+        [HttpGet("{id}/export/pdf2")]
+        public async Task<IActionResult> ExportCharacterPdf(
+    int id,
+    [FromServices] CharacterPdfService pdfService)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var character = await GetCharacterWithAccessCheck(id, userId);
+            if (character == null) return NotFound();
+
+            var dto = MapToCharacterDto(character);
+            var pdfBytes = pdfService.GenerateCharacterSheet(dto);
+            var fileName = $"{SanitizeFileName(character.Name)}_character_sheet.pdf";
+
+            return File(pdfBytes, "application/pdf", fileName);
+        }
+
+        // ── Shared access check helper ───────────────────────────────────────────────
+        // Add this private method to CharactersController alongside your other helpers
+        private async Task<Character?> GetCharacterWithAccessCheck(int characterId, string userId)
+        {
+            var character = await _context.Characters
+                .Include(c => c.Classes)
+                .Include(c => c.Player)
+                .FirstOrDefaultAsync(c => c.CharacterId == characterId);
+
+            if (character == null) return null;
+
+            // Player can export their own character
+            if (character.PlayerId == userId) return character;
+
+            // DM can export anyone in their campaign
+            var isDM = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == character.CampaignId
+                             && cm.UserId == userId
+                             && cm.Role == CampaignRole.DM);
+
+            if (isDM) return character;
+
+            // Campaign member can export characters in their campaign
+            var isMember = await _context.CampaignMembers
+                .AnyAsync(cm => cm.CampaignId == character.CampaignId
+                             && cm.UserId == userId);
+
+            return isMember ? character : null;
+        }
+
+        private static string SanitizeFileName(string name)
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            return string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c));
+        }
+
         [HttpPost("import/dndbeyond")]
         public async Task<ActionResult<CharacterDto>> ImportFromDndBeyond(
     [FromBody] DndBeyondImportRequest request,

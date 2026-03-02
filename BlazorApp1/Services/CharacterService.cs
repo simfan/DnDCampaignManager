@@ -61,6 +61,20 @@ namespace BlazorApp1.Services
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<CharacterDto>();
         }
+
+        public async Task<byte[]?> ExportCharacterJsonAsync(int characterId)
+        {
+            var response = await _httpClient.GetAsync($"api/characters/{characterId}/export/json2");
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+
+        public async Task<byte[]?> ExportCharacterPdfAsync(int characterId)
+        {
+            var response = await _httpClient.GetAsync($"api/characters/{characterId}/export/pdf2");
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadAsByteArrayAsync();
+        }
         /*public async Task<CreateCharacterDto> ImportFromDndBeyondAsync(long characterId, int campaignId)
         {
             var url = $"https://www.dndbeyond.com/character/{characterId}/json";
